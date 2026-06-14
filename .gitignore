@@ -1,0 +1,20 @@
+# Operating system files
+.DS_Store
+Thumbs.db
+
+# Editor and IDE settings
+.idea/
+.vscode/
+
+# Dependencies
+/vendor/
+/node_modules/
+
+# Build and package output
+/dist/
+/build/
+/*.zip
+
+# Environment files
+.env
+.env.*
