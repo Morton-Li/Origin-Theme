@@ -91,6 +91,68 @@ function origin_enqueue_assets(): void {
 add_action('wp_enqueue_scripts', 'origin_enqueue_assets');
 
 /**
+ * 读取导航布局设置。
+ *
+ * @return string 导航布局标识。
+ */
+function origin_get_navigation_layout(): string {
+	$layout = (string) get_theme_mod('origin_navigation_layout', 'left-logo');
+
+	if (! in_array($layout, array('left-logo', 'center-menu'), true)) {
+		return 'left-logo';
+	}
+
+	return $layout;
+}
+
+/**
+ * 注册主题自定义设置。
+ *
+ * @param WP_Customize_Manager $wp_customize 自定义器实例。
+ */
+function origin_customize_register(WP_Customize_Manager $wp_customize): void {
+	$wp_customize->add_section(
+		'origin_layout',
+		array(
+			'title'    => __('布局', 'origin'),
+			'priority' => 30,
+		)
+	);
+
+	$wp_customize->add_setting(
+		'origin_navigation_layout',
+		array(
+			'default'           => 'left-logo',
+			'sanitize_callback' => 'origin_sanitize_navigation_layout',
+		)
+	);
+
+	$wp_customize->add_control(
+		'origin_navigation_layout',
+		array(
+			'choices' => array(
+				'left-logo'   => __('Logo 与导航左对齐', 'origin'),
+				'center-menu' => __('导航居中', 'origin'),
+			),
+			'label'   => __('导航布局', 'origin'),
+			'section' => 'origin_layout',
+			'type'    => 'select',
+		)
+	);
+}
+add_action('customize_register', 'origin_customize_register');
+
+/**
+ * 清理导航布局设置。
+ *
+ * @param string $value 待清理的设置值。
+ * @return string 安全的设置值。
+ */
+function origin_sanitize_navigation_layout(string $value): string {
+	return in_array($value, array('left-logo', 'center-menu'), true) ? $value : 'left-logo';
+}
+
+/**
  * 估算文章阅读时间。
  *
  * @param int|null $post_id 文章 ID。为空时读取当前循环内文章。
@@ -177,6 +239,8 @@ function origin_the_load_more_pagination(): void {
 function origin_icon(string $name): void {
 	$icons = array(
 		'search'        => '<svg aria-hidden="true" viewBox="0 0 24 24" focusable="false"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>',
+		'close'         => '<svg aria-hidden="true" viewBox="0 0 24 24" focusable="false"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>',
+		'share'         => '<svg aria-hidden="true" viewBox="0 0 24 24" focusable="false"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><path d="m8.6 10.5 6.8-4"></path><path d="m8.6 13.5 6.8 4"></path></svg>',
 		'star'          => '<svg aria-hidden="true" viewBox="0 0 24 24" focusable="false"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1L12 16.9l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9L12 3Z"></path></svg>',
 		'chevron-right' => '<svg aria-hidden="true" viewBox="0 0 24 24" focusable="false"><path d="m9 18 6-6-6-6"></path></svg>',
 		'arrow-left'    => '<svg aria-hidden="true" viewBox="0 0 24 24" focusable="false"><path d="m15 18-6-6 6-6"></path></svg>',

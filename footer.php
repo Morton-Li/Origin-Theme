@@ -25,22 +25,21 @@ if (! defined('ABSPATH')) {
 				);
 				?>
 			</div>
-			<nav class="gh-foot-menu" aria-label="<?php esc_attr_e('页脚导航', 'origin'); ?>">
-				<?php
-				wp_nav_menu(
-					array(
-						'container'      => false,
-						'theme_location' => 'footer',
-						'menu_class'     => 'menu',
-						'fallback_cb'    => false,
-						'depth'          => 1,
-					)
-				);
-				?>
-			</nav>
-			<div class="gh-powered-by">
-				<a href="<?php echo esc_url(__('https://wordpress.org/', 'origin')); ?>" rel="noopener"><?php esc_html_e('Powered by WordPress', 'origin'); ?></a>
-			</div>
+			<?php if (has_nav_menu('footer')) : ?>
+				<nav class="gh-foot-menu" aria-label="<?php esc_attr_e('页脚导航', 'origin'); ?>">
+					<?php
+					wp_nav_menu(
+						array(
+							'container'      => false,
+							'theme_location' => 'footer',
+							'menu_class'     => 'menu',
+							'fallback_cb'    => false,
+							'depth'          => 1,
+						)
+					);
+					?>
+				</nav>
+			<?php endif; ?>
 		</div>
 	</footer>
 </div>

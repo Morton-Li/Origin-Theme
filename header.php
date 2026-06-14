@@ -18,26 +18,22 @@ if (! defined('ABSPATH')) {
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<?php wp_head(); ?>
 </head>
-<body <?php body_class('is-head-left-logo'); ?>>
+<body <?php body_class('is-head-' . origin_get_navigation_layout()); ?>>
 <?php wp_body_open(); ?>
 <div class="site">
 	<header id="gh-head" class="gh-head gh-outer">
 		<div class="gh-head-inner gh-inner">
 			<div class="gh-head-brand">
 				<div class="gh-head-brand-wrapper">
-					<a class="gh-head-logo" href="<?php echo esc_url(home_url('/')); ?>" rel="home">
-						<?php
-						if (has_custom_logo()) {
-							the_custom_logo();
-						} else {
-							bloginfo('name');
-						}
-						?>
-					</a>
+					<?php if (has_custom_logo()) : ?>
+						<?php the_custom_logo(); ?>
+					<?php else : ?>
+						<a class="gh-head-logo" href="<?php echo esc_url(home_url('/')); ?>" rel="home"><?php bloginfo('name'); ?></a>
+					<?php endif; ?>
 				</div>
-				<a class="gh-search gh-icon-btn" href="<?php echo esc_url(home_url('/?s=')); ?>" aria-label="<?php esc_attr_e('搜索本站', 'origin'); ?>">
+				<button class="gh-search gh-icon-btn" type="button" aria-label="<?php esc_attr_e('搜索本站', 'origin'); ?>" aria-controls="origin-search-modal" aria-expanded="false" data-origin-search-open>
 					<?php origin_icon('search'); ?>
-				</a>
+				</button>
 				<button class="gh-burger" type="button" aria-label="<?php esc_attr_e('切换导航菜单', 'origin'); ?>" aria-controls="primary-menu" aria-expanded="false">
 					<span></span>
 				</button>
@@ -58,11 +54,22 @@ if (! defined('ABSPATH')) {
 			</nav>
 
 			<div class="gh-head-actions">
-				<a class="gh-search gh-icon-btn" href="<?php echo esc_url(home_url('/?s=')); ?>" aria-label="<?php esc_attr_e('搜索本站', 'origin'); ?>">
+				<button class="gh-search gh-icon-btn" type="button" aria-label="<?php esc_attr_e('搜索本站', 'origin'); ?>" aria-controls="origin-search-modal" aria-expanded="false" data-origin-search-open>
 					<?php origin_icon('search'); ?>
-				</a>
+				</button>
 			</div>
 		</div>
 	</header>
+
+	<div id="origin-search-modal" class="search-modal" hidden data-origin-search-modal>
+		<div class="search-modal-backdrop" data-origin-search-close></div>
+		<div class="search-modal-panel" role="dialog" aria-modal="true" aria-labelledby="origin-search-title">
+			<button class="search-modal-close gh-icon-btn" type="button" aria-label="<?php esc_attr_e('关闭搜索', 'origin'); ?>" data-origin-search-close>
+				<?php origin_icon('close'); ?>
+			</button>
+			<h2 id="origin-search-title" class="search-modal-title"><?php esc_html_e('搜索文章', 'origin'); ?></h2>
+			<?php get_search_form(); ?>
+		</div>
+	</div>
 
 	<div class="site-content">
