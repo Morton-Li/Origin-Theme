@@ -87,6 +87,19 @@ function origin_enqueue_assets(): void {
 			'in_footer' => true,
 		)
 	);
+
+	if (origin_is_turnstile_enabled()) {
+		wp_enqueue_script(
+			'origin-turnstile',
+			'https://challenges.cloudflare.com/turnstile/v0/api.js',
+			array(),
+			null,
+			array(
+				'in_footer' => true,
+				'strategy'  => 'defer',
+			)
+		);
+	}
 }
 add_action('wp_enqueue_scripts', 'origin_enqueue_assets');
 
@@ -131,12 +144,56 @@ function origin_customize_register(WP_Customize_Manager $wp_customize): void {
 		'origin_navigation_layout',
 		array(
 			'choices' => array(
-				'left-logo'   => __('Logo 与导航左对齐', 'origin'),
-				'center-menu' => __('导航居中', 'origin'),
+				'left-logo'   => __('导航栏左对齐', 'origin'),
+				'center-menu' => __('导航栏居中', 'origin'),
 			),
 			'label'   => __('导航布局', 'origin'),
 			'section' => 'origin_layout',
 			'type'    => 'select',
+		)
+	);
+
+	$wp_customize->add_section(
+		'origin_security',
+		array(
+			'title'    => __('安全', 'origin'),
+			'priority' => 35,
+		)
+	);
+
+	$wp_customize->add_setting(
+		'origin_turnstile_site_key',
+		array(
+			'default'           => '',
+			'sanitize_callback' => 'sanitize_text_field',
+		)
+	);
+
+	$wp_customize->add_control(
+		'origin_turnstile_site_key',
+		array(
+			'description' => __('配置后，登录、注册和评论表单会显示 Cloudflare Turnstile 质询。', 'origin'),
+			'label'       => __('Turnstile 站点密钥', 'origin'),
+			'section'     => 'origin_security',
+			'type'        => 'text',
+		)
+	);
+
+	$wp_customize->add_setting(
+		'origin_turnstile_secret_key',
+		array(
+			'default'           => '',
+			'sanitize_callback' => 'sanitize_text_field',
+		)
+	);
+
+	$wp_customize->add_control(
+		'origin_turnstile_secret_key',
+		array(
+			'description' => __('站点密钥和密钥都填写后才会启用验证。密钥只用于服务端校验，不会输出到前台。', 'origin'),
+			'label'       => __('Turnstile 密钥', 'origin'),
+			'section'     => 'origin_security',
+			'type'        => 'password',
 		)
 	);
 }
@@ -210,6 +267,7 @@ function origin_get_auth_notice(): string {
 	$messages = array(
 		'login_missing'        => __('请输入账号和密码。', 'origin'),
 		'login_failed'         => __('账号或密码不正确。', 'origin'),
+		'turnstile_failed'     => __('请先完成安全验证。', 'origin'),
 		'register_closed'      => __('当前站点暂未开放注册。', 'origin'),
 		'register_missing'     => __('请填写注册所需信息。', 'origin'),
 		'register_bad_user'    => __('用户名只能包含字母、数字、空格、下划线、连字符、句点和 @。', 'origin'),
@@ -235,6 +293,121 @@ function origin_get_auth_panel(): string {
 }
 
 /**
+ * 读取 Turnstile 站点密钥。
+ *
+ * @return string 站点密钥。
+ */
+function origin_get_turnstile_site_key(): string {
+	return trim((string) get_theme_mod('origin_turnstile_site_key', ''));
+}
+
+/**
+ * 读取 Turnstile 服务端密钥。
+ *
+ * @return string 服务端密钥。
+ */
+function origin_get_turnstile_secret_key(): string {
+	return trim((string) get_theme_mod('origin_turnstile_secret_key', ''));
+}
+
+/**
+ * 判断 Turnstile 是否已完整配置。
+ *
+ * @return bool 是否启用 Turnstile。
+ */
+function origin_is_turnstile_enabled(): bool {
+	return '' !== origin_get_turnstile_site_key() && '' !== origin_get_turnstile_secret_key();
+}
+
+/**
+ * 读取当前请求 IP，用于 Turnstile 可选校验参数。
+ *
+ * @return string 请求 IP；无法安全识别时返回空字符串。
+ */
+function origin_get_request_ip(): string {
+	$server_keys = array('HTTP_CF_CONNECTING_IP', 'HTTP_X_FORWARDED_FOR', 'REMOTE_ADDR');
+
+	foreach ($server_keys as $server_key) {
+		if (empty($_SERVER[$server_key])) {
+			continue;
+		}
+
+		$value = sanitize_text_field(wp_unslash((string) $_SERVER[$server_key]));
+
+		if ('HTTP_X_FORWARDED_FOR' === $server_key) {
+			$forwarded_ips = explode(',', $value);
+			$value         = trim($forwarded_ips[0]);
+		}
+
+		if (filter_var($value, FILTER_VALIDATE_IP)) {
+			return $value;
+		}
+	}
+
+	return '';
+}
+
+/**
+ * 校验 Turnstile 质询结果。
+ *
+ * @return bool 未启用时始终通过；启用后返回 Cloudflare 校验结果。
+ */
+function origin_verify_turnstile(): bool {
+	if (! origin_is_turnstile_enabled()) {
+		return true;
+	}
+
+	$token = isset($_POST['cf-turnstile-response']) ? sanitize_text_field(wp_unslash($_POST['cf-turnstile-response'])) : '';
+
+	if ('' === $token) {
+		return false;
+	}
+
+	$body = array(
+		'secret'   => origin_get_turnstile_secret_key(),
+		'response' => $token,
+	);
+
+	$remote_ip = origin_get_request_ip();
+
+	if ('' !== $remote_ip) {
+		$body['remoteip'] = $remote_ip;
+	}
+
+	$response = wp_remote_post(
+		'https://challenges.cloudflare.com/turnstile/v0/siteverify',
+		array(
+			'body'    => $body,
+			'timeout' => 8,
+		)
+	);
+
+	if (is_wp_error($response)) {
+		return false;
+	}
+
+	$result = json_decode(wp_remote_retrieve_body($response), true);
+
+	return is_array($result) && ! empty($result['success']);
+}
+
+/**
+ * 输出 Turnstile 前台组件。
+ *
+ * @param string $action 当前组件用途。
+ */
+function origin_the_turnstile_widget(string $action = ''): void {
+	if (! origin_is_turnstile_enabled()) {
+		return;
+	}
+
+	$action = sanitize_key($action);
+	?>
+	<div class="origin-turnstile cf-turnstile" data-sitekey="<?php echo esc_attr(origin_get_turnstile_site_key()); ?>" data-theme="auto" data-size="flexible"<?php echo '' !== $action ? ' data-action="' . esc_attr($action) . '"' : ''; ?>></div>
+	<?php
+}
+
+/**
  * 处理主题级登录提交。
  */
 function origin_handle_login(): void {
@@ -245,6 +418,10 @@ function origin_handle_login(): void {
 
 	if ('' === $login || '' === $password) {
 		origin_redirect_with_auth_status('login_missing', 'login');
+	}
+
+	if (! origin_verify_turnstile()) {
+		origin_redirect_with_auth_status('turnstile_failed', 'login');
 	}
 
 	if (is_email($login)) {
@@ -278,6 +455,10 @@ function origin_handle_register(): void {
 
 	if (! get_option('users_can_register')) {
 		origin_redirect_with_auth_status('register_closed', 'register');
+	}
+
+	if (! origin_verify_turnstile()) {
+		origin_redirect_with_auth_status('turnstile_failed', 'register');
 	}
 
 	$username = isset($_POST['origin_username']) ? sanitize_user(wp_unslash($_POST['origin_username']), true) : '';
@@ -367,6 +548,133 @@ function origin_the_header_auth_controls(string $extra_class = ''): void {
 	</div>
 	<?php
 }
+
+/**
+ * 调整评论表单默认字段。
+ *
+ * @param array<string, string> $fields 评论表单字段。
+ * @return array<string, string> 调整后的评论表单字段。
+ */
+function origin_comment_form_default_fields(array $fields): array {
+	$commenter = wp_get_current_commenter();
+	$required  = (bool) get_option('require_name_email');
+
+	$required_indicator = $required ? ' <span class="required">*</span>' : '';
+	$required_attribute = $required ? ' required' : '';
+
+	$fields['author'] = sprintf(
+		'<p class="comment-form-author"><label for="author">%1$s%2$s</label><input id="author" name="author" type="text" value="%3$s" maxlength="245" autocomplete="name"%4$s></p>',
+		esc_html__('显示名称', 'origin'),
+		$required_indicator,
+		esc_attr($commenter['comment_author']),
+		$required_attribute
+	);
+
+	$fields['email'] = sprintf(
+		'<p class="comment-form-email"><label for="email">%1$s%2$s</label><input id="email" name="email" type="email" value="%3$s" maxlength="100" autocomplete="email"%4$s></p>',
+		esc_html__('邮箱', 'origin'),
+		$required_indicator,
+		esc_attr($commenter['comment_author_email']),
+		$required_attribute
+	);
+
+	unset($fields['url']);
+
+	if (isset($fields['cookies'])) {
+		$checked = empty($commenter['comment_author_email']) ? '' : ' checked';
+
+		$fields['cookies'] = sprintf(
+			'<p class="comment-form-cookies-consent"><label for="wp-comment-cookies-consent"><input id="wp-comment-cookies-consent" name="wp-comment-cookies-consent" type="checkbox" value="yes"%1$s><span>%2$s</span></label></p>',
+			$checked,
+			esc_html__('保存我的信息以便下次评论时使用。', 'origin')
+		);
+	}
+
+	return $fields;
+}
+add_filter('comment_form_default_fields', 'origin_comment_form_default_fields');
+
+/**
+ * 调整评论表单整体文案与评论输入框。
+ *
+ * @param array<string, mixed> $defaults 评论表单默认参数。
+ * @return array<string, mixed> 调整后的默认参数。
+ */
+function origin_comment_form_defaults(array $defaults): array {
+	$defaults['comment_notes_before'] = '';
+	$defaults['comment_notes_after']  = '';
+	$defaults['comment_field']        = sprintf(
+		'<p class="comment-form-comment"><label for="comment">%1$s <span class="required">*</span></label><textarea id="comment" name="comment" cols="45" rows="5" maxlength="65525" required></textarea></p>',
+		esc_html__('评论', 'origin')
+	);
+
+	return $defaults;
+}
+add_filter('comment_form_defaults', 'origin_comment_form_defaults');
+
+/**
+ * 在评论提交按钮前输出 Turnstile 组件。
+ *
+ * @param string               $submit_field 提交区域 HTML。
+ * @param array<string, mixed> $args         评论表单参数。
+ * @return string 调整后的提交区域 HTML。
+ */
+function origin_comment_form_submit_field(string $submit_field, array $args): string {
+	if (! origin_is_turnstile_enabled()) {
+		return $submit_field;
+	}
+
+	ob_start();
+	origin_the_turnstile_widget('comment');
+	$turnstile = ob_get_clean();
+
+	return $turnstile . $submit_field;
+}
+add_filter('comment_form_submit_field', 'origin_comment_form_submit_field', 10, 2);
+
+/**
+ * 评论提交前校验 Turnstile，并移除网站字段。
+ *
+ * @param array<string, mixed> $commentdata 评论数据。
+ * @return array<string, mixed> 调整后的评论数据。
+ */
+function origin_preprocess_comment(array $commentdata): array {
+	$commentdata['comment_author_url'] = '';
+
+	$comment_type = isset($commentdata['comment_type']) ? (string) $commentdata['comment_type'] : '';
+
+	if (is_admin() || ('' !== $comment_type && 'comment' !== $comment_type)) {
+		return $commentdata;
+	}
+
+	if (! origin_verify_turnstile()) {
+		wp_die(
+			esc_html__('请先完成安全验证后再发表评论。', 'origin'),
+			esc_html__('安全验证失败', 'origin'),
+			array(
+				'back_link' => true,
+				'response'  => 403,
+			)
+		);
+	}
+
+	return $commentdata;
+}
+add_filter('preprocess_comment', 'origin_preprocess_comment');
+
+/**
+ * 前台评论作者始终显示为纯文本，避免输出作者网站链接。
+ *
+ * @param string $author_link 作者链接 HTML。
+ * @param string $author      作者显示名称。
+ * @return string 安全的作者纯文本。
+ */
+function origin_comment_author_link(string $author_link, string $author): string {
+	unset($author_link);
+
+	return esc_html($author);
+}
+add_filter('get_comment_author_link', 'origin_comment_author_link', 10, 2);
 
 /**
  * 估算文章阅读时间。

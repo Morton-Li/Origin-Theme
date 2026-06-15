@@ -105,6 +105,7 @@ if (! defined('ABSPATH')) {
 						<input id="origin-login-remember" name="origin_remember" type="checkbox" value="1">
 						<span><?php esc_html_e('保持登录', 'origin'); ?></span>
 					</label>
+					<?php origin_the_turnstile_widget('login'); ?>
 					<button class="gh-btn gh-primary-btn auth-submit" type="submit"><?php esc_html_e('登录', 'origin'); ?></button>
 				</form>
 			</div>
@@ -121,6 +122,7 @@ if (! defined('ABSPATH')) {
 						<input id="origin-register-email" name="origin_email" type="email" autocomplete="email" required>
 						<label for="origin-register-password"><?php esc_html_e('密码', 'origin'); ?></label>
 						<input id="origin-register-password" name="origin_password" type="password" autocomplete="new-password" minlength="8" required>
+						<?php origin_the_turnstile_widget('register'); ?>
 						<button class="gh-btn gh-primary-btn auth-submit" type="submit"><?php esc_html_e('注册', 'origin'); ?></button>
 					</form>
 				<?php else : ?>
