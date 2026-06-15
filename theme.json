@@ -1,0 +1,44 @@
+{
+	"$schema": "https://schemas.wp.org/trunk/theme.json",
+	"version": 3,
+	"settings": {
+		"appearanceTools": true,
+		"color": {
+			"palette": [
+				{
+					"color": "#ff572f",
+					"name": "品牌色",
+					"slug": "brand"
+				},
+				{
+					"color": "#333333",
+					"name": "正文",
+					"slug": "foreground"
+				},
+				{
+					"color": "#ffffff",
+					"name": "背景",
+					"slug": "background"
+				}
+			]
+		},
+		"layout": {
+			"contentSize": "760px",
+			"wideSize": "1120px"
+		},
+		"typography": {
+			"fontFamilies": [
+				{
+					"fontFamily": "Mulish, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Helvetica, Arial, \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", sans-serif",
+					"name": "现代无衬线",
+					"slug": "sans"
+				},
+				{
+					"fontFamily": "Lora, Georgia, \"Times New Roman\", \"Songti SC\", \"SimSun\", serif",
+					"name": "优雅衬线",
+					"slug": "serif"
+				}
+			]
+		}
+	}
+}

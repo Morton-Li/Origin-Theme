@@ -1,0 +1,17 @@
+{
+	"name": "morton-li/origin-theme",
+	"description": "A minimal and elegant WordPress theme for Chinese writers.",
+	"type": "wordpress-theme",
+	"license": "GPL-3.0-only",
+	"authors": [
+		{
+			"name": "Morton Li"
+		}
+	],
+	"require": {
+		"php": ">=8.5"
+	},
+	"scripts": {
+		"lint:php": "find . -path './.git' -prune -o -name '*.php' -print0 | xargs -0 -n1 php -l"
+	}
+}

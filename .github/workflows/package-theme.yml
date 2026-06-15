@@ -1,0 +1,125 @@
+name: Package WordPress theme
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  package:
+    name: Package Origin
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Resolve tag version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          tag_name="${GITHUB_REF_NAME}"
+
+          if [[ ! "${tag_name}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Tag ${tag_name} does not match vMAJOR.MINOR.PATCH."
+            exit 1
+          fi
+
+          version="${tag_name#v}"
+          current_version="$(sed -nE 's/^[[:space:]]*Version:[[:space:]]*([0-9]+\.[0-9]+\.[0-9]+).*$/\1/p' style.css | head -n 1)"
+
+          if [[ -z "${current_version}" ]]; then
+            echo "Unable to read theme version from style.css."
+            exit 1
+          fi
+
+          if [[ "${current_version}" != "${version}" ]]; then
+            sed -i -E "s/^([[:space:]]*Version:[[:space:]]*).*/\1${version}/" style.css
+            echo "Theme version changed from ${current_version} to ${version} for this package."
+          fi
+
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+
+      - name: Build package directory
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          theme_slug="origin"
+          package_dir="build/${theme_slug}"
+
+          rm -rf build dist
+          mkdir -p "${package_dir}" dist
+
+          rsync -a \
+            --exclude='.git/' \
+            --exclude='.github/' \
+            --exclude='.gitignore' \
+            --exclude='.DS_Store' \
+            --exclude='.idea/' \
+            --exclude='.vscode/' \
+            --exclude='AGENT.md' \
+            --exclude='build/' \
+            --exclude='dist/' \
+            --exclude='node_modules/' \
+            --exclude='vendor/' \
+            --exclude='*.zip' \
+            ./ "${package_dir}/"
+
+          test -f "${package_dir}/style.css"
+          test -f "${package_dir}/functions.php"
+
+      - name: Create zip
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          theme_slug="origin"
+          version="${{ steps.version.outputs.version }}"
+          zip_name="${theme_slug}-${version}.zip"
+
+          (cd build && zip -rq "../dist/${zip_name}" "${theme_slug}")
+
+          unzip -l "dist/${zip_name}"
+          unzip -Z1 "dist/${zip_name}" > dist/package-files.txt
+
+          if grep -qvE "^${theme_slug}/" dist/package-files.txt; then
+            echo "Package must contain only the ${theme_slug}/ top-level directory."
+            exit 1
+          fi
+
+          grep -qx "${theme_slug}/style.css" dist/package-files.txt
+
+      - name: Upload package
+        uses: actions/upload-artifact@v7
+        with:
+          name: origin-${{ steps.version.outputs.version }}
+          path: dist/origin-${{ steps.version.outputs.version }}.zip
+          if-no-files-found: error
+
+  publish:
+    name: Publish release
+    runs-on: ubuntu-latest
+    needs: package
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download package
+        uses: actions/download-artifact@v8
+        with:
+          name: origin-${{ needs.package.outputs.version }}
+          path: dist
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v3
+        with:
+          name: Origin ${{ needs.package.outputs.version }}
+          body: Origin ${{ needs.package.outputs.version }}
+          files: dist/origin-${{ needs.package.outputs.version }}.zip
+          fail_on_unmatched_files: true
+          make_latest: true
