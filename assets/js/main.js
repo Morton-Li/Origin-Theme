@@ -11,6 +11,11 @@
 	const searchOpenButtons = document.querySelectorAll('[data-origin-search-open]');
 	const searchCloseButtons = document.querySelectorAll('[data-origin-search-close]');
 	const searchField = searchModal?.querySelector('.search-field');
+	const authModal = document.querySelector('[data-origin-auth-modal]');
+	const authOpenButtons = document.querySelectorAll('[data-origin-auth-open]');
+	const authCloseButtons = document.querySelectorAll('[data-origin-auth-close]');
+	const authTabs = document.querySelectorAll('[data-origin-auth-tab]');
+	const authPanels = document.querySelectorAll('.auth-panel[data-origin-auth-panel]');
 	const shareButtons = document.querySelectorAll('[data-origin-share]');
 
 	if (menuButton && primaryMenu) {
@@ -35,6 +40,10 @@
 			return;
 		}
 
+		if (isOpen) {
+			setAuthState(false);
+		}
+
 		searchModal.hidden = !isOpen;
 		document.body.classList.toggle('search-open', isOpen);
 
@@ -44,6 +53,47 @@
 
 		if (isOpen && searchField instanceof HTMLInputElement) {
 			window.setTimeout(() => searchField.focus(), 0);
+		}
+	};
+
+	const setAuthPanel = (panelName) => {
+		const selectedPanel = panelName === 'register' ? 'register' : 'login';
+
+		authTabs.forEach((tab) => {
+			const isSelected = tab.getAttribute('data-origin-auth-tab') === selectedPanel;
+
+			tab.classList.toggle('is-active', isSelected);
+			tab.setAttribute('aria-selected', String(isSelected));
+			tab.setAttribute('tabindex', isSelected ? '0' : '-1');
+		});
+
+		authPanels.forEach((panel) => {
+			const isSelected = panel.getAttribute('data-origin-auth-panel') === selectedPanel;
+
+			panel.hidden = !isSelected;
+		});
+	};
+
+	const setAuthState = (isOpen, panelName = 'login') => {
+		if (!authModal) {
+			return;
+		}
+
+		if (isOpen) {
+			setSearchState(false);
+			setAuthPanel(panelName);
+		}
+
+		authModal.hidden = !isOpen;
+		document.body.classList.toggle('auth-open', isOpen);
+
+		if (isOpen) {
+			const currentPanel = authModal.querySelector('.auth-panel:not([hidden])');
+			const firstField = currentPanel?.querySelector('input:not([type="hidden"])');
+
+			if (firstField instanceof HTMLInputElement) {
+				window.setTimeout(() => firstField.focus(), 0);
+			}
 		}
 	};
 
@@ -59,7 +109,31 @@
 		if (event.key === 'Escape' && document.body.classList.contains('search-open')) {
 			setSearchState(false);
 		}
+
+		if (event.key === 'Escape' && document.body.classList.contains('auth-open')) {
+			setAuthState(false);
+		}
 	});
+
+	authOpenButtons.forEach((button) => {
+		button.addEventListener('click', () => setAuthState(true, button.getAttribute('data-origin-auth-open') || 'login'));
+	});
+
+	authCloseButtons.forEach((button) => {
+		button.addEventListener('click', () => setAuthState(false));
+	});
+
+	authTabs.forEach((tab) => {
+		tab.addEventListener('click', () => setAuthPanel(tab.getAttribute('data-origin-auth-tab') || 'login'));
+	});
+
+	if (authModal) {
+		setAuthPanel(authModal.getAttribute('data-origin-auth-current-panel') || 'login');
+
+		if (authModal.getAttribute('data-origin-auth-has-notice') === 'true') {
+			setAuthState(true, authModal.getAttribute('data-origin-auth-current-panel') || 'login');
+		}
+	}
 
 	shareButtons.forEach((button) => {
 		button.addEventListener('click', async () => {

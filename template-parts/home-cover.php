@@ -28,5 +28,14 @@ $site_description = get_bloginfo('description', 'display');
 		<?php if ($site_description) : ?>
 			<div class="cover-description"><?php echo esc_html($site_description); ?></div>
 		<?php endif; ?>
+
+		<?php if (! is_user_logged_in()) : ?>
+			<div class="cover-cta">
+				<?php if (get_option('users_can_register')) : ?>
+					<button class="button" type="button" data-origin-auth-open="register"><?php esc_html_e('立即注册', 'origin'); ?></button>
+				<?php endif; ?>
+				<button class="button button-secondary" type="button" data-origin-auth-open="login"><?php esc_html_e('登录', 'origin'); ?></button>
+			</div>
+		<?php endif; ?>
 	</div>
 </section>

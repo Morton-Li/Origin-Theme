@@ -153,6 +153,222 @@ function origin_sanitize_navigation_layout(string $value): string {
 }
 
 /**
+ * 读取当前页面 URL，用于认证完成后回到原页面。
+ *
+ * @return string 当前页面 URL。
+ */
+function origin_get_current_url(): string {
+	$request_uri = isset($_SERVER['REQUEST_URI']) ? (string) wp_unslash($_SERVER['REQUEST_URI']) : '/';
+	$request_uri = str_replace(array("\r", "\n"), '', $request_uri);
+
+	if ('' === $request_uri || '/' !== $request_uri[0]) {
+		$request_uri = '/';
+	}
+
+	return home_url($request_uri);
+}
+
+/**
+ * 读取认证跳转地址。
+ *
+ * @return string 安全的跳转地址。
+ */
+function origin_get_auth_redirect_url(): string {
+	$redirect_to = isset($_POST['redirect_to']) ? esc_url_raw(wp_unslash($_POST['redirect_to'])) : (wp_get_referer() ?: home_url('/'));
+	$redirect_to = remove_query_arg(array('origin_auth', 'origin_auth_panel'), $redirect_to);
+
+	return wp_validate_redirect($redirect_to, home_url('/'));
+}
+
+/**
+ * 跳转回前台页面并携带认证状态。
+ *
+ * @param string $status 认证状态。
+ * @param string $panel  应打开的认证面板。
+ */
+function origin_redirect_with_auth_status(string $status, string $panel = 'login'): void {
+	wp_safe_redirect(
+		add_query_arg(
+			array(
+				'origin_auth'       => sanitize_key($status),
+				'origin_auth_panel' => sanitize_key($panel),
+			),
+			origin_get_auth_redirect_url()
+		)
+	);
+	exit;
+}
+
+/**
+ * 读取认证提示文本。
+ *
+ * @return string 认证提示文本。
+ */
+function origin_get_auth_notice(): string {
+	$status = isset($_GET['origin_auth']) ? sanitize_key(wp_unslash($_GET['origin_auth'])) : '';
+
+	$messages = array(
+		'login_missing'        => __('请输入账号和密码。', 'origin'),
+		'login_failed'         => __('账号或密码不正确。', 'origin'),
+		'register_closed'      => __('当前站点暂未开放注册。', 'origin'),
+		'register_missing'     => __('请填写注册所需信息。', 'origin'),
+		'register_bad_user'    => __('用户名只能包含字母、数字、空格、下划线、连字符、句点和 @。', 'origin'),
+		'register_user_exists' => __('这个用户名已被使用。', 'origin'),
+		'register_bad_email'   => __('请输入有效的邮箱地址。', 'origin'),
+		'register_email_used'  => __('这个邮箱地址已被使用。', 'origin'),
+		'register_bad_pass'    => __('密码至少需要 8 个字符。', 'origin'),
+		'register_failed'      => __('注册暂时失败，请稍后再试。', 'origin'),
+	);
+
+	return $messages[$status] ?? '';
+}
+
+/**
+ * 读取认证弹层默认面板。
+ *
+ * @return string 面板名称。
+ */
+function origin_get_auth_panel(): string {
+	$panel = isset($_GET['origin_auth_panel']) ? sanitize_key(wp_unslash($_GET['origin_auth_panel'])) : 'login';
+
+	return in_array($panel, array('login', 'register'), true) ? $panel : 'login';
+}
+
+/**
+ * 处理主题级登录提交。
+ */
+function origin_handle_login(): void {
+	check_admin_referer('origin_login', 'origin_login_nonce');
+
+	$login    = isset($_POST['origin_login']) ? sanitize_text_field(wp_unslash($_POST['origin_login'])) : '';
+	$password = isset($_POST['origin_password']) ? (string) wp_unslash($_POST['origin_password']) : '';
+
+	if ('' === $login || '' === $password) {
+		origin_redirect_with_auth_status('login_missing', 'login');
+	}
+
+	if (is_email($login)) {
+		$user = get_user_by('email', $login);
+		$login = $user ? $user->user_login : $login;
+	}
+
+	$user = wp_signon(
+		array(
+			'user_login'    => $login,
+			'user_password' => $password,
+			'remember'      => ! empty($_POST['origin_remember']),
+		),
+		is_ssl()
+	);
+
+	if (is_wp_error($user)) {
+		origin_redirect_with_auth_status('login_failed', 'login');
+	}
+
+	wp_safe_redirect(origin_get_auth_redirect_url());
+	exit;
+}
+add_action('admin_post_nopriv_origin_login', 'origin_handle_login');
+
+/**
+ * 处理主题级注册提交。
+ */
+function origin_handle_register(): void {
+	check_admin_referer('origin_register', 'origin_register_nonce');
+
+	if (! get_option('users_can_register')) {
+		origin_redirect_with_auth_status('register_closed', 'register');
+	}
+
+	$username = isset($_POST['origin_username']) ? sanitize_user(wp_unslash($_POST['origin_username']), true) : '';
+	$email    = isset($_POST['origin_email']) ? sanitize_email(wp_unslash($_POST['origin_email'])) : '';
+	$password = isset($_POST['origin_password']) ? (string) wp_unslash($_POST['origin_password']) : '';
+
+	if ('' === $username || '' === $email || '' === $password) {
+		origin_redirect_with_auth_status('register_missing', 'register');
+	}
+
+	if (! validate_username($username)) {
+		origin_redirect_with_auth_status('register_bad_user', 'register');
+	}
+
+	if (username_exists($username)) {
+		origin_redirect_with_auth_status('register_user_exists', 'register');
+	}
+
+	if (! is_email($email)) {
+		origin_redirect_with_auth_status('register_bad_email', 'register');
+	}
+
+	if (email_exists($email)) {
+		origin_redirect_with_auth_status('register_email_used', 'register');
+	}
+
+	if (strlen($password) < 8) {
+		origin_redirect_with_auth_status('register_bad_pass', 'register');
+	}
+
+	$user_id = wp_create_user($username, $password, $email);
+
+	if (is_wp_error($user_id)) {
+		origin_redirect_with_auth_status('register_failed', 'register');
+	}
+
+	wp_new_user_notification($user_id, null, 'admin');
+	wp_signon(
+		array(
+			'user_login'    => $username,
+			'user_password' => $password,
+			'remember'      => true,
+		),
+		is_ssl()
+	);
+
+	wp_safe_redirect(origin_get_auth_redirect_url());
+	exit;
+}
+add_action('admin_post_nopriv_origin_register', 'origin_handle_register');
+
+/**
+ * 处理主题级退出登录。
+ */
+function origin_handle_logout(): void {
+	check_admin_referer('origin_logout', 'origin_logout_nonce');
+
+	wp_logout();
+	wp_safe_redirect(origin_get_auth_redirect_url());
+	exit;
+}
+add_action('admin_post_origin_logout', 'origin_handle_logout');
+
+/**
+ * 输出头部账户操作。
+ *
+ * @param string $extra_class 额外 CSS 类名。
+ */
+function origin_the_header_auth_controls(string $extra_class = ''): void {
+	$classes = trim('gh-head-members ' . $extra_class);
+	?>
+	<div class="<?php echo esc_attr($classes); ?>">
+		<?php if (is_user_logged_in()) : ?>
+			<span class="gh-head-user"><?php echo esc_html(wp_get_current_user()->display_name); ?></span>
+			<form class="gh-head-logout" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" method="post">
+				<input type="hidden" name="action" value="origin_logout">
+				<input type="hidden" name="redirect_to" value="<?php echo esc_url(origin_get_current_url()); ?>">
+				<?php wp_nonce_field('origin_logout', 'origin_logout_nonce'); ?>
+				<button class="gh-head-btn gh-btn gh-primary-btn" type="submit"><?php esc_html_e('退出', 'origin'); ?></button>
+			</form>
+		<?php else : ?>
+			<button class="gh-head-link" type="button" data-origin-auth-open="login"><?php esc_html_e('登录', 'origin'); ?></button>
+			<?php if (get_option('users_can_register')) : ?>
+				<button class="gh-head-btn gh-btn gh-primary-btn" type="button" data-origin-auth-open="register"><?php esc_html_e('注册', 'origin'); ?></button>
+			<?php endif; ?>
+		<?php endif; ?>
+	</div>
+	<?php
+}
+
+/**
  * 估算文章阅读时间。
  *
  * @param int|null $post_id 文章 ID。为空时读取当前循环内文章。
