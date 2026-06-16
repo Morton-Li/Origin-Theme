@@ -16,10 +16,14 @@ if (! defined('ABSPATH')) {
 <head>
 	<meta charset="<?php bloginfo('charset'); ?>">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<script>document.documentElement.classList.add('origin-js', 'origin-page-loading');</script>
 	<?php wp_head(); ?>
 </head>
 <body <?php body_class('is-head-' . origin_get_navigation_layout()); ?>>
 <?php wp_body_open(); ?>
+<div class="origin-page-loader" aria-hidden="true" data-origin-page-loader>
+	<div class="origin-page-loader-mark"></div>
+</div>
 <div class="site">
 	<header id="gh-head" class="gh-head gh-outer">
 		<div class="gh-head-inner gh-inner">
