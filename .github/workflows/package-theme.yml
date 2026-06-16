@@ -16,6 +16,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+
       - name: Resolve tag version
         id: version
         shell: bash
@@ -72,6 +77,24 @@ jobs:
 
           test -f "${package_dir}/style.css"
           test -f "${package_dir}/functions.php"
+
+      - name: Minify package assets
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          package_dir="build/origin"
+          css_file="${package_dir}/assets/css/screen.css"
+          js_file="${package_dir}/assets/js/main.js"
+
+          test -f "${css_file}"
+          test -f "${js_file}"
+
+          npx --yes clean-css-cli@5.6.3 -O2 -o "${css_file}" "${css_file}"
+          npx --yes terser@5.48.0 "${js_file}" --compress --mangle --output "${js_file}"
+
+          test -s "${css_file}"
+          test -s "${js_file}"
 
       - name: Create zip
         shell: bash
