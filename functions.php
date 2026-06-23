@@ -769,6 +769,7 @@ function origin_icon(string $name): void {
 		'chevron-right' => '<svg aria-hidden="true" viewBox="0 0 24 24" focusable="false"><path d="m9 18 6-6-6-6"></path></svg>',
 		'arrow-left'    => '<svg aria-hidden="true" viewBox="0 0 24 24" focusable="false"><path d="m15 18-6-6 6-6"></path></svg>',
 		'arrow-right'   => '<svg aria-hidden="true" viewBox="0 0 24 24" focusable="false"><path d="m9 18 6-6-6-6"></path></svg>',
+		'arrow-up'      => '<svg aria-hidden="true" viewBox="0 0 24 24" focusable="false"><path d="m18 15-6-6-6 6"></path></svg>',
 	);
 
 	if (! isset($icons[$name])) {
