@@ -96,42 +96,44 @@ if (! defined('ABSPATH')) {
 				<div class="auth-notice" role="alert"><?php echo esc_html(origin_get_auth_notice()); ?></div>
 			<?php endif; ?>
 
-			<div id="origin-auth-login" class="auth-panel" role="tabpanel" aria-labelledby="origin-auth-login-tab" data-origin-auth-panel="login">
-				<form class="auth-form" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" method="post">
-					<input type="hidden" name="action" value="origin_login">
-					<input type="hidden" name="redirect_to" value="<?php echo esc_url(origin_get_current_url()); ?>">
-					<?php wp_nonce_field('origin_login', 'origin_login_nonce'); ?>
-					<label for="origin-login-field"><?php esc_html_e('账号或邮箱', 'origin'); ?></label>
-					<input id="origin-login-field" name="origin_login" type="text" autocomplete="username" required>
-					<label for="origin-login-password"><?php esc_html_e('密码', 'origin'); ?></label>
-					<input id="origin-login-password" name="origin_password" type="password" autocomplete="current-password" required>
-					<label class="auth-checkbox" for="origin-login-remember">
-						<input id="origin-login-remember" name="origin_remember" type="checkbox" value="1">
-						<span><?php esc_html_e('保持登录', 'origin'); ?></span>
-					</label>
-					<?php origin_the_turnstile_widget('login'); ?>
-					<button class="gh-btn gh-primary-btn auth-submit" type="submit"><?php esc_html_e('登录', 'origin'); ?></button>
-				</form>
-			</div>
-
-			<div id="origin-auth-register" class="auth-panel" role="tabpanel" aria-labelledby="origin-auth-register-tab" data-origin-auth-panel="register">
-				<?php if (get_option('users_can_register')) : ?>
+			<div class="auth-panel-stage" data-origin-auth-stage>
+				<div id="origin-auth-login" class="auth-panel" role="tabpanel" aria-labelledby="origin-auth-login-tab" data-origin-auth-panel="login">
 					<form class="auth-form" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" method="post">
-						<input type="hidden" name="action" value="origin_register">
+						<input type="hidden" name="action" value="origin_login">
 						<input type="hidden" name="redirect_to" value="<?php echo esc_url(origin_get_current_url()); ?>">
-						<?php wp_nonce_field('origin_register', 'origin_register_nonce'); ?>
-						<label for="origin-register-username"><?php esc_html_e('用户名', 'origin'); ?></label>
-						<input id="origin-register-username" name="origin_username" type="text" autocomplete="username" required>
-						<label for="origin-register-email"><?php esc_html_e('邮箱', 'origin'); ?></label>
-						<input id="origin-register-email" name="origin_email" type="email" autocomplete="email" required>
-						<label for="origin-register-password"><?php esc_html_e('密码', 'origin'); ?></label>
-						<input id="origin-register-password" name="origin_password" type="password" autocomplete="new-password" minlength="8" required>
-						<?php origin_the_turnstile_widget('register'); ?>
-						<button class="gh-btn gh-primary-btn auth-submit" type="submit"><?php esc_html_e('注册', 'origin'); ?></button>
+						<?php wp_nonce_field('origin_login', 'origin_login_nonce'); ?>
+						<label for="origin-login-field"><?php esc_html_e('账号或邮箱', 'origin'); ?></label>
+						<input id="origin-login-field" name="origin_login" type="text" autocomplete="username" required>
+						<label for="origin-login-password"><?php esc_html_e('密码', 'origin'); ?></label>
+						<input id="origin-login-password" name="origin_password" type="password" autocomplete="current-password" required>
+						<label class="auth-checkbox" for="origin-login-remember">
+							<input id="origin-login-remember" name="origin_remember" type="checkbox" value="1">
+							<span><?php esc_html_e('保持登录', 'origin'); ?></span>
+						</label>
+						<?php origin_the_turnstile_widget('login'); ?>
+						<button class="gh-btn gh-primary-btn auth-submit" type="submit"><?php esc_html_e('登录', 'origin'); ?></button>
 					</form>
-				<?php else : ?>
-					<p class="auth-muted"><?php esc_html_e('当前站点暂未开放注册。', 'origin'); ?></p>
-				<?php endif; ?>
+				</div>
+
+				<div id="origin-auth-register" class="auth-panel" role="tabpanel" aria-labelledby="origin-auth-register-tab" data-origin-auth-panel="register">
+					<?php if (get_option('users_can_register')) : ?>
+						<form class="auth-form" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" method="post">
+							<input type="hidden" name="action" value="origin_register">
+							<input type="hidden" name="redirect_to" value="<?php echo esc_url(origin_get_current_url()); ?>">
+							<?php wp_nonce_field('origin_register', 'origin_register_nonce'); ?>
+							<label for="origin-register-username"><?php esc_html_e('用户名', 'origin'); ?></label>
+							<input id="origin-register-username" name="origin_username" type="text" autocomplete="username" required>
+							<label for="origin-register-email"><?php esc_html_e('邮箱', 'origin'); ?></label>
+							<input id="origin-register-email" name="origin_email" type="email" autocomplete="email" required>
+							<label for="origin-register-password"><?php esc_html_e('密码', 'origin'); ?></label>
+							<input id="origin-register-password" name="origin_password" type="password" autocomplete="new-password" minlength="8" required>
+							<?php origin_the_turnstile_widget('register'); ?>
+							<button class="gh-btn gh-primary-btn auth-submit" type="submit"><?php esc_html_e('注册', 'origin'); ?></button>
+						</form>
+					<?php else : ?>
+						<p class="auth-muted"><?php esc_html_e('当前站点暂未开放注册。', 'origin'); ?></p>
+					<?php endif; ?>
+				</div>
 			</div>
 		</div>
 	</div>

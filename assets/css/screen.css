@@ -693,6 +693,32 @@ p {
 	border-radius: 3px;
 }
 
+.auth-panel-stage {
+	position: relative;
+	min-height: 0;
+	overflow: hidden;
+	transition: height 0.22s var(--animation-base);
+}
+
+.auth-panel {
+	position: absolute;
+	inset: 0 0 auto;
+	width: 100%;
+	visibility: hidden;
+	opacity: 0;
+	pointer-events: none;
+	transition: opacity 0.18s var(--animation-base), transform 0.18s var(--animation-base), visibility 0s linear 0.18s;
+	transform: translateY(0.6rem);
+}
+
+.auth-panel.is-active {
+	visibility: visible;
+	opacity: 1;
+	pointer-events: auto;
+	transition-delay: 0s;
+	transform: translateY(0);
+}
+
 .auth-form {
 	display: flex;
 	flex-direction: column;
@@ -1113,6 +1139,80 @@ p {
 	height: 1.5rem;
 }
 
+.origin-back-to-top {
+	--origin-scroll-progress: 0deg;
+	position: fixed;
+	right: clamp(1.8rem, 4vw, 3.2rem);
+	bottom: clamp(1.8rem, 4vw, 3.2rem);
+	z-index: 60;
+	display: inline-grid;
+	place-items: center;
+	width: 5rem;
+	height: 5rem;
+	padding: 0;
+	color: var(--darker-gray-color);
+	background: transparent;
+	border: 0;
+	border-radius: 50%;
+	cursor: pointer;
+	opacity: 0;
+	pointer-events: none;
+	transition: opacity 0.2s var(--animation-base), transform 0.2s var(--animation-base), color 0.2s var(--animation-base);
+	transform: translateY(1rem);
+}
+
+.origin-back-to-top.is-visible {
+	opacity: 1;
+	pointer-events: auto;
+	transform: translateY(0);
+}
+
+.origin-back-to-top::before,
+.origin-back-to-top::after {
+	position: absolute;
+	border-radius: inherit;
+	content: "";
+}
+
+.origin-back-to-top::before {
+	inset: 0;
+	background: conic-gradient(var(--darker-gray-color) var(--origin-scroll-progress), var(--light-gray-color) 0);
+}
+
+.origin-back-to-top::after {
+	inset: 0.4rem;
+	background: var(--white-color);
+	box-shadow: 0 0.8rem 2rem rgba(0, 0, 0, 0.08);
+}
+
+.origin-back-to-top:hover {
+	color: var(--brand-color);
+	transform: translateY(-0.2rem);
+}
+
+.origin-back-to-top:active {
+	transform: translateY(0);
+}
+
+.origin-back-to-top:focus-visible {
+	outline: 0;
+	box-shadow: 0 0 0 3px rgba(255, 87, 47, 0.18);
+}
+
+.origin-back-to-top-icon {
+	position: relative;
+	z-index: 1;
+	display: inline-grid;
+	place-items: center;
+	width: 2rem;
+	height: 2rem;
+}
+
+.origin-back-to-top-icon svg {
+	width: 100%;
+	height: 100%;
+}
+
 .single-media {
 	margin: 4.5rem 0 0;
 }
@@ -1475,7 +1575,13 @@ p {
 }
 
 .comment-form .origin-turnstile {
+	width: 100%;
+	max-width: 32rem;
 	margin: 1.2rem 0 1.4rem;
+}
+
+.comment-form .origin-turnstile iframe {
+	max-width: 100%;
 }
 
 .comment-form input[type="submit"] {
