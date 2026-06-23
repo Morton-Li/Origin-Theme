@@ -27,5 +27,9 @@ get_header();
 	?>
 </main>
 
+<button class="origin-back-to-top" type="button" aria-label="<?php esc_attr_e('返回顶部', 'origin'); ?>" data-origin-back-to-top>
+	<span class="origin-back-to-top-icon"><?php origin_icon('arrow-up'); ?></span>
+</button>
+
 <?php
 get_footer();

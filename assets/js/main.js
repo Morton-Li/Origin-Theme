@@ -17,10 +17,16 @@
 	const authCloseButtons = document.querySelectorAll('[data-origin-auth-close]');
 	const authTabs = document.querySelectorAll('[data-origin-auth-tab]');
 	const authPanels = document.querySelectorAll('.auth-panel[data-origin-auth-panel]');
+	const authStage = document.querySelector('[data-origin-auth-stage]');
 	const shareButtons = document.querySelectorAll('[data-origin-share]');
+	const backToTopButton = document.querySelector('[data-origin-back-to-top]');
 	const transitionTimers = new WeakMap();
 	const modalTransitionDuration = 240;
+	const authPanelEnterDelay = 90;
+	const authPanelTransitionDuration = 180;
 	const pageTransitionDuration = 220;
+	let backToTopFrame = 0;
+	let authPanelResizeObserver = null;
 
 	const finishPageLoad = () => {
 		root.classList.remove('origin-page-loading', 'origin-page-exiting');
@@ -158,6 +164,42 @@
 		beginPageExit();
 	});
 
+	const updateBackToTop = () => {
+		if (!(backToTopButton instanceof HTMLButtonElement)) {
+			return;
+		}
+
+		const scrollableHeight = Math.max(document.documentElement.scrollHeight - window.innerHeight, 1);
+		const progress = Math.min(Math.max(window.scrollY / scrollableHeight, 0), 1);
+		const progressDegrees = `${Math.round(progress * 360)}deg`;
+
+		backToTopButton.style.setProperty('--origin-scroll-progress', progressDegrees);
+		backToTopButton.classList.toggle('is-visible', window.scrollY > 240);
+		backToTopButton.setAttribute('aria-hidden', String(window.scrollY <= 240));
+		backToTopButton.tabIndex = window.scrollY > 240 ? 0 : -1;
+	};
+
+	const requestBackToTopUpdate = () => {
+		if (backToTopFrame) {
+			return;
+		}
+
+		backToTopFrame = window.requestAnimationFrame(() => {
+			backToTopFrame = 0;
+			updateBackToTop();
+		});
+	};
+
+	if (backToTopButton instanceof HTMLButtonElement) {
+		backToTopButton.addEventListener('click', () => {
+			window.scrollTo({ behavior: 'smooth', top: 0 });
+		});
+
+		updateBackToTop();
+		window.addEventListener('scroll', requestBackToTopUpdate, { passive: true });
+		window.addEventListener('resize', requestBackToTopUpdate);
+	}
+
 	const setSearchState = (isOpen) => {
 		if (!searchModal) {
 			return;
@@ -185,8 +227,46 @@
 		}
 	};
 
-	const setAuthPanel = (panelName) => {
+	const setAuthStageHeight = (panel, shouldAnimate = true) => {
+		if (!(authStage instanceof HTMLElement) || !(panel instanceof HTMLElement)) {
+			return;
+		}
+
+		const height = panel.scrollHeight;
+
+		if (shouldAnimate) {
+			authStage.style.height = `${height}px`;
+			return;
+		}
+
+		authStage.style.transition = 'none';
+		authStage.style.height = `${height}px`;
+		authStage.offsetHeight;
+		authStage.style.transition = '';
+	};
+
+	const observeAuthPanelHeight = (panel) => {
+		if (!(authStage instanceof HTMLElement) || !(panel instanceof HTMLElement) || !('ResizeObserver' in window)) {
+			return;
+		}
+
+		if (authPanelResizeObserver) {
+			authPanelResizeObserver.disconnect();
+		}
+
+		authPanelResizeObserver = new ResizeObserver(() => {
+			if (panel.classList.contains('is-active')) {
+				setAuthStageHeight(panel);
+			}
+		});
+		authPanelResizeObserver.observe(panel);
+	};
+
+	const setAuthPanel = (panelName, shouldAnimate = true, shouldStagger = shouldAnimate) => {
 		const selectedPanel = panelName === 'register' ? 'register' : 'login';
+		const currentPanel = Array.from(authPanels).find((panel) => panel.classList.contains('is-active'));
+		const isSwitchingPanels = shouldStagger && currentPanel instanceof HTMLElement && currentPanel.getAttribute('data-origin-auth-panel') !== selectedPanel;
+		let selectedPanelElement = null;
 
 		authTabs.forEach((tab) => {
 			const isSelected = tab.getAttribute('data-origin-auth-tab') === selectedPanel;
@@ -198,9 +278,51 @@
 
 		authPanels.forEach((panel) => {
 			const isSelected = panel.getAttribute('data-origin-auth-panel') === selectedPanel;
+			const activeTimer = transitionTimers.get(panel);
 
-			panel.hidden = !isSelected;
+			if (activeTimer) {
+				window.clearTimeout(activeTimer);
+				transitionTimers.delete(panel);
+			}
+
+			if (isSelected) {
+				selectedPanelElement = panel;
+				panel.hidden = false;
+				panel.setAttribute('aria-hidden', 'false');
+
+				const showPanel = () => {
+					window.requestAnimationFrame(() => {
+						panel.classList.add('is-active');
+						transitionTimers.delete(panel);
+					});
+				};
+
+				if (isSwitchingPanels) {
+					transitionTimers.set(panel, window.setTimeout(showPanel, authPanelEnterDelay));
+				} else {
+					showPanel();
+				}
+
+				return;
+			}
+
+			panel.classList.remove('is-active');
+			panel.setAttribute('aria-hidden', 'true');
+			transitionTimers.set(
+				panel,
+				window.setTimeout(() => {
+					panel.hidden = true;
+					transitionTimers.delete(panel);
+				}, authPanelTransitionDuration)
+			);
 		});
+
+		if (selectedPanelElement instanceof HTMLElement) {
+			setAuthStageHeight(selectedPanelElement, shouldAnimate);
+			observeAuthPanelHeight(selectedPanelElement);
+		}
+
+		return selectedPanelElement;
 	};
 
 	const setAuthState = (isOpen, panelName = 'login') => {
@@ -208,14 +330,17 @@
 			return;
 		}
 
+		const wasAuthOpen = document.body.classList.contains('auth-open');
+		let activeAuthPanel = null;
+
 		if (isOpen) {
 			setSearchState(false);
 			setMenuState(false);
-			setAuthPanel(panelName);
+			openLayer(authModal);
 		}
 
 		if (isOpen) {
-			openLayer(authModal);
+			activeAuthPanel = setAuthPanel(panelName, true, wasAuthOpen);
 		} else {
 			closeLayer(authModal);
 		}
@@ -223,7 +348,7 @@
 		document.body.classList.toggle('auth-open', isOpen);
 
 		if (isOpen) {
-			const currentPanel = authModal.querySelector('.auth-panel:not([hidden])');
+			const currentPanel = activeAuthPanel || authModal.querySelector('.auth-panel.is-active');
 			const firstField = currentPanel?.querySelector('input:not([type="hidden"])');
 
 			if (firstField instanceof HTMLInputElement) {
@@ -267,7 +392,7 @@
 	});
 
 	if (authModal) {
-		setAuthPanel(authModal.getAttribute('data-origin-auth-current-panel') || 'login');
+		setAuthPanel(authModal.getAttribute('data-origin-auth-current-panel') || 'login', false);
 
 		if (authModal.getAttribute('data-origin-auth-has-notice') === 'true') {
 			setAuthState(true, authModal.getAttribute('data-origin-auth-current-panel') || 'login');
