@@ -72,6 +72,7 @@ jobs:
             --exclude='dist/' \
             --exclude='node_modules/' \
             --exclude='vendor/' \
+            --exclude='screenshot.png' \
             --exclude='*.zip' \
             ./ "${package_dir}/"
 
