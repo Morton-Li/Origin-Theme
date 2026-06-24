@@ -421,6 +421,10 @@ p {
 	white-space: nowrap;
 }
 
+.gh-head-user:hover {
+	color: var(--darker-gray-color);
+}
+
 .gh-head-logout {
 	margin: 0;
 }
@@ -730,6 +734,13 @@ p {
 	color: var(--darker-gray-color);
 	font-size: 1.4rem;
 	font-weight: 700;
+}
+
+.auth-help {
+	margin: -0.7rem 0 0;
+	color: var(--secondary-text-color);
+	font-size: 1.25rem;
+	line-height: 1.5;
 }
 
 .auth-form input:not([type="checkbox"]) {
@@ -1456,6 +1467,280 @@ p {
 	transform: translateY(0);
 }
 
+.account-header.gh-canvas,
+.account-shell.gh-canvas {
+	width: min(100% - 4rem, 1040px);
+}
+
+.account-header {
+	display: flex;
+	align-items: center;
+	gap: 2.4rem;
+	margin-bottom: 4rem;
+}
+
+.account-avatar {
+	flex: 0 0 auto;
+}
+
+.account-avatar-image {
+	display: block;
+	width: 9.6rem;
+	height: 9.6rem;
+	border: 1px solid var(--light-gray-color);
+	border-radius: 50%;
+}
+
+.account-heading {
+	min-width: 0;
+}
+
+.account-header-actions {
+	display: flex;
+	flex: 0 0 auto;
+	margin-left: auto;
+}
+
+.account-kicker {
+	margin-bottom: 0.6rem;
+	color: var(--brand-color);
+	font-size: 1.2rem;
+	font-weight: 800;
+	text-transform: uppercase;
+}
+
+.account-heading h1 {
+	margin-bottom: 0.8rem;
+	font-size: clamp(3rem, 5vw, 4.6rem);
+	word-break: break-word;
+}
+
+.account-heading p:last-child {
+	margin-bottom: 0;
+	color: var(--secondary-text-color);
+	font-family: var(--font-serif);
+	font-size: 1.8rem;
+}
+
+.account-shell {
+	display: flex;
+	flex-direction: column;
+	gap: 2rem;
+}
+
+.account-notice {
+	padding: 1.2rem 1.4rem;
+	color: var(--darker-gray-color);
+	background: var(--lighter-gray-color);
+	border: 1px solid var(--light-gray-color);
+	border-radius: 4px;
+	font-size: 1.4rem;
+}
+
+.account-notice.is-success {
+	border-color: rgba(46, 125, 50, 0.35);
+}
+
+.account-notice.is-error {
+	border-color: rgba(255, 87, 47, 0.45);
+}
+
+.account-layout {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) minmax(28rem, 32rem);
+	gap: 2rem;
+	align-items: start;
+}
+
+.account-aside {
+	display: flex;
+	flex-direction: column;
+	gap: 2rem;
+}
+
+.account-panel {
+	padding: 2.4rem;
+	background: var(--white-color);
+	border: 1px solid var(--light-gray-color);
+	border-radius: 4px;
+}
+
+.account-section-heading {
+	margin-bottom: 2rem;
+}
+
+.account-section-heading h2,
+.account-panel h2 {
+	margin-bottom: 0.6rem;
+	font-size: 2rem;
+}
+
+.account-section-heading p,
+.account-panel p {
+	color: var(--secondary-text-color);
+	font-size: 1.4rem;
+}
+
+.account-form {
+	display: flex;
+	flex-direction: column;
+	gap: 1.2rem;
+	margin: 0;
+}
+
+.account-form label {
+	color: var(--darker-gray-color);
+	font-size: 1.4rem;
+	font-weight: 700;
+}
+
+.account-form input {
+	width: 100%;
+	height: 4.4rem;
+	padding: 0 1.4rem;
+	color: var(--primary-text-color);
+	background: var(--white-color);
+	border: 1px solid var(--light-gray-color);
+	border-radius: 4px;
+	font: inherit;
+	transition: background-color 0.18s var(--animation-base), border-color 0.18s var(--animation-base), box-shadow 0.18s var(--animation-base);
+}
+
+.account-form input:disabled {
+	color: var(--secondary-text-color);
+	background: var(--lighter-gray-color);
+	cursor: not-allowed;
+}
+
+.account-form input:not(:disabled):hover {
+	border-color: var(--mid-gray-color);
+}
+
+.account-form input:not(:disabled):focus {
+	outline: 0;
+	border-color: var(--brand-color);
+	box-shadow: 0 0 0 3px rgba(255, 87, 47, 0.12);
+}
+
+.account-form-actions {
+	display: flex;
+	margin-top: 0.8rem;
+}
+
+.account-stats {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 1rem;
+}
+
+.account-stat {
+	padding: 1.5rem 1.2rem;
+	background: var(--lighter-gray-color);
+	border: 1px solid var(--light-gray-color);
+	border-radius: 4px;
+}
+
+.account-stat span {
+	display: block;
+	color: var(--secondary-text-color);
+	font-size: 1.2rem;
+	font-weight: 800;
+	text-transform: uppercase;
+}
+
+.account-stat strong {
+	display: block;
+	margin-top: 0.4rem;
+	color: var(--darker-gray-color);
+	font-size: 2.4rem;
+	line-height: 1;
+}
+
+.account-access .gh-btn {
+	margin-top: 0.6rem;
+}
+
+.account-logout {
+	margin: 1.2rem 0 0;
+}
+
+.account-meta dl {
+	margin: 0;
+}
+
+.account-meta dl div {
+	display: flex;
+	justify-content: space-between;
+	gap: 1.2rem;
+	padding-block: 1rem;
+	border-top: 1px solid var(--light-gray-color);
+}
+
+.account-meta dl div:first-child {
+	border-top: 0;
+}
+
+.account-meta dt {
+	color: var(--secondary-text-color);
+	font-size: 1.3rem;
+}
+
+.account-meta dd {
+	margin: 0;
+	color: var(--darker-gray-color);
+	font-size: 1.3rem;
+	font-weight: 800;
+	text-align: right;
+}
+
+.account-activity {
+	margin-top: 1rem;
+}
+
+.account-comment-list {
+	padding: 0;
+	margin: 0;
+	list-style: none;
+}
+
+.account-comment-list li {
+	padding-block: 1.6rem;
+	border-top: 1px solid var(--light-gray-color);
+}
+
+.account-comment-list li:first-child {
+	padding-top: 0;
+	border-top: 0;
+}
+
+.account-comment-list a {
+	display: flex;
+	justify-content: space-between;
+	gap: 1.6rem;
+	color: var(--darker-gray-color);
+	font-weight: 800;
+	transition: color 0.18s var(--animation-base);
+}
+
+.account-comment-list a:hover {
+	color: var(--brand-color);
+}
+
+.account-comment-list time {
+	flex: 0 0 auto;
+	color: var(--secondary-text-color);
+	font-size: 1.3rem;
+	font-weight: 700;
+}
+
+.account-comment-list p,
+.account-empty {
+	margin: 0.6rem 0 0;
+	color: var(--secondary-text-color);
+	font-family: var(--font-serif);
+	font-size: 1.5rem;
+}
+
 .comment-list {
 	padding-left: 0;
 	list-style: none;
@@ -1851,5 +2136,43 @@ p {
 	.search-modal-panel,
 	.auth-modal-panel {
 		padding-top: 4.4rem;
+	}
+
+	.account-header {
+		align-items: flex-start;
+		flex-direction: column;
+		gap: 1.6rem;
+		margin-bottom: 3rem;
+	}
+
+	.account-avatar-image {
+		width: 7.2rem;
+		height: 7.2rem;
+	}
+
+	.account-heading h1 {
+		font-size: 3.2rem;
+	}
+
+	.account-header-actions {
+		margin-left: 0;
+	}
+
+	.account-layout {
+		grid-template-columns: 1fr;
+	}
+
+	.account-panel {
+		padding: 2rem;
+	}
+
+	.account-comment-list a,
+	.account-meta dl div {
+		flex-direction: column;
+		gap: 0.4rem;
+	}
+
+	.account-meta dd {
+		text-align: left;
 	}
 }
