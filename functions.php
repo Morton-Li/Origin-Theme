@@ -154,6 +154,32 @@ function origin_customize_register(WP_Customize_Manager $wp_customize): void {
 	);
 
 	$wp_customize->add_section(
+		'origin_account',
+		array(
+			'title'    => __('账户', 'origin'),
+			'priority' => 34,
+		)
+	);
+
+	$wp_customize->add_setting(
+		'origin_allow_regular_admin_access',
+		array(
+			'default'           => false,
+			'sanitize_callback' => 'origin_sanitize_checkbox',
+		)
+	);
+
+	$wp_customize->add_control(
+		'origin_allow_regular_admin_access',
+		array(
+			'description' => __('关闭后，非管理员访问 wp-admin 会进入主题用户后台，并同步隐藏前台工具栏。', 'origin'),
+			'label'       => __('允许非管理员进入 WordPress 后台', 'origin'),
+			'section'     => 'origin_account',
+			'type'        => 'checkbox',
+		)
+	);
+
+	$wp_customize->add_section(
 		'origin_security',
 		array(
 			'title'    => __('安全', 'origin'),
@@ -210,6 +236,16 @@ function origin_sanitize_navigation_layout(string $value): string {
 }
 
 /**
+ * 清理复选框设置。
+ *
+ * @param mixed $value 待清理的设置值。
+ * @return bool 复选框是否启用。
+ */
+function origin_sanitize_checkbox(mixed $value): bool {
+	return (bool) $value;
+}
+
+/**
  * 读取当前页面 URL，用于认证完成后回到原页面。
  *
  * @return string 当前页面 URL。
@@ -226,11 +262,301 @@ function origin_get_current_url(): string {
 }
 
 /**
+ * 读取主题用户后台固定地址别名。
+ *
+ * @return string 用户后台地址别名。
+ */
+function origin_get_user_dashboard_slug(): string {
+	return 'account';
+}
+
+/**
+ * 读取主题用户后台 URL。
+ *
+ * @return string 用户后台 URL。
+ */
+function origin_get_user_dashboard_url(): string {
+	return home_url('/' . origin_get_user_dashboard_slug() . '/');
+}
+
+/**
+ * 判断主题是否允许非管理员进入 WordPress 后台。
+ *
+ * @return bool 允许时返回 true。
+ */
+function origin_can_regular_users_access_admin(): bool {
+	return (bool) get_theme_mod('origin_allow_regular_admin_access', false);
+}
+
+/**
+ * 判断当前用户是否可以进入 WordPress 后台页面。
+ *
+ * @return bool 可以进入时返回 true。
+ */
+function origin_can_current_user_access_wp_admin(): bool {
+	return current_user_can('manage_options') || (is_user_logged_in() && origin_can_regular_users_access_admin());
+}
+
+/**
+ * 注册主题用户后台重写规则。
+ */
+function origin_add_user_dashboard_rewrite_rule(): void {
+	add_rewrite_rule('^' . origin_get_user_dashboard_slug() . '/?$', 'index.php?origin_user_dashboard=1', 'top');
+}
+add_action('init', 'origin_add_user_dashboard_rewrite_rule');
+
+/**
+ * 增加主题用户后台查询变量。
+ *
+ * @param array<int, string> $vars 已注册的公开查询变量。
+ * @return array<int, string> 调整后的查询变量。
+ */
+function origin_add_user_dashboard_query_var(array $vars): array {
+	$vars[] = 'origin_user_dashboard';
+
+	return $vars;
+}
+add_filter('query_vars', 'origin_add_user_dashboard_query_var');
+
+/**
+ * 判断当前请求路径是否为主题用户后台。
+ *
+ * @return bool 是用户后台请求时返回 true。
+ */
+function origin_is_user_dashboard_path(): bool {
+	$request_uri = isset($_SERVER['REQUEST_URI']) ? (string) wp_unslash($_SERVER['REQUEST_URI']) : '';
+	$request_uri = str_replace(array("\r", "\n"), '', $request_uri);
+	$request_path = wp_parse_url($request_uri, PHP_URL_PATH);
+
+	if (! is_string($request_path)) {
+		return false;
+	}
+
+	$home_path = wp_parse_url(home_url('/'), PHP_URL_PATH);
+	$home_path = is_string($home_path) ? trim($home_path, '/') : '';
+	$request_path = trim($request_path, '/');
+
+	if ('' !== $home_path && ($request_path === $home_path || str_starts_with($request_path, $home_path . '/'))) {
+		$request_path = trim(substr($request_path, strlen($home_path)), '/');
+	}
+
+	return origin_get_user_dashboard_slug() === $request_path;
+}
+
+/**
+ * 在重写规则未刷新时仍识别用户后台请求。
+ *
+ * @param WP $wp 当前请求对象。
+ */
+function origin_detect_user_dashboard_request(WP $wp): void {
+	if (origin_is_user_dashboard_path()) {
+		$wp->query_vars['origin_user_dashboard'] = '1';
+	}
+}
+add_action('parse_request', 'origin_detect_user_dashboard_request');
+
+/**
+ * 判断当前请求是否为主题用户后台。
+ *
+ * @return bool 是用户后台请求时返回 true。
+ */
+function origin_is_user_dashboard_request(): bool {
+	return '1' === (string) get_query_var('origin_user_dashboard') || origin_is_user_dashboard_path();
+}
+
+/**
+ * 准备主题用户后台请求并保护访问权限。
+ */
+function origin_prepare_user_dashboard_request(): void {
+	if (! origin_is_user_dashboard_request()) {
+		return;
+	}
+
+	global $wp_query;
+
+	if ($wp_query instanceof WP_Query) {
+		$wp_query->is_404  = false;
+		$wp_query->is_home = false;
+		$wp_query->is_page = true;
+	}
+
+	status_header(200);
+	nocache_headers();
+
+	if (! is_user_logged_in()) {
+		wp_safe_redirect(
+			add_query_arg(
+				array(
+					'origin_auth'       => 'login_required',
+					'origin_auth_panel' => 'login',
+				),
+				home_url('/')
+			)
+		);
+		exit;
+	}
+}
+add_action('template_redirect', 'origin_prepare_user_dashboard_request', 0);
+
+/**
+ * 加载主题用户后台模板。
+ *
+ * @param string $template 当前模板路径。
+ * @return string 用户后台模板路径。
+ */
+function origin_load_user_dashboard_template(string $template): string {
+	if (! origin_is_user_dashboard_request()) {
+		return $template;
+	}
+
+	$account_template = locate_template('user-dashboard.php');
+
+	return $account_template ?: $template;
+}
+add_filter('template_include', 'origin_load_user_dashboard_template');
+
+/**
+ * 切换主题后刷新用户后台重写规则。
+ */
+function origin_flush_user_dashboard_rewrite_rules(): void {
+	origin_add_user_dashboard_rewrite_rule();
+	flush_rewrite_rules(false);
+	update_option('origin_rewrite_version', ORIGIN_VERSION);
+}
+add_action('after_switch_theme', 'origin_flush_user_dashboard_rewrite_rules');
+
+/**
+ * 版本变化后为管理员刷新重写规则，避免新路由短暂 404。
+ */
+function origin_maybe_flush_user_dashboard_rewrite_rules(): void {
+	if (! current_user_can('manage_options')) {
+		return;
+	}
+
+	if (ORIGIN_VERSION === get_option('origin_rewrite_version')) {
+		return;
+	}
+
+	origin_flush_user_dashboard_rewrite_rules();
+}
+add_action('admin_init', 'origin_maybe_flush_user_dashboard_rewrite_rules', 0);
+
+/**
+ * 判断当前后台请求是否是前台表单或异步入口。
+ *
+ * @return bool 是非后台页面入口时返回 true。
+ */
+function origin_is_wp_admin_endpoint_request(): bool {
+	global $pagenow;
+
+	return wp_doing_ajax() || in_array($pagenow, array('admin-ajax.php', 'admin-post.php'), true);
+}
+
+/**
+ * 非管理员在开关关闭时只能进入主题用户后台。
+ */
+function origin_redirect_regular_users_from_wp_admin(): void {
+	if (! is_user_logged_in() || origin_can_current_user_access_wp_admin() || origin_is_wp_admin_endpoint_request()) {
+		return;
+	}
+
+	wp_safe_redirect(origin_get_user_dashboard_url());
+	exit;
+}
+add_action('admin_init', 'origin_redirect_regular_users_from_wp_admin', 1);
+
+/**
+ * 在限制 WordPress 后台时隐藏普通用户的前台工具栏。
+ *
+ * @param bool $show_admin_bar 是否显示工具栏。
+ * @return bool 调整后的工具栏显示状态。
+ */
+function origin_filter_admin_bar_visibility(bool $show_admin_bar): bool {
+	if (is_user_logged_in() && ! origin_can_current_user_access_wp_admin()) {
+		return false;
+	}
+
+	return $show_admin_bar;
+}
+add_filter('show_admin_bar', 'origin_filter_admin_bar_visibility');
+
+/**
+ * 在核心登录流程中将非管理员引导到主题用户后台。
+ *
+ * @param string           $redirect_to           当前跳转地址。
+ * @param string           $requested_redirect_to 用户请求的跳转地址。
+ * @param WP_User|WP_Error $user                  登录用户或错误对象。
+ * @return string 调整后的跳转地址。
+ */
+function origin_filter_login_redirect(string $redirect_to, string $requested_redirect_to, WP_User|WP_Error $user): string {
+	unset($requested_redirect_to);
+
+	if ($user instanceof WP_User && $user->exists() && ! user_can($user, 'manage_options') && ! origin_can_regular_users_access_admin()) {
+		return origin_get_user_dashboard_url();
+	}
+
+	return $redirect_to;
+}
+add_filter('login_redirect', 'origin_filter_login_redirect', 10, 3);
+
+/**
+ * 在限制 WordPress 后台时改写用户后台 URL。
+ *
+ * @param string $url     原始后台 URL。
+ * @param int    $user_id 用户 ID。
+ * @return string 调整后的后台 URL。
+ */
+function origin_filter_user_dashboard_url(string $url, int $user_id): string {
+	if ($user_id > 0 && ! origin_can_regular_users_access_admin() && ! user_can($user_id, 'manage_options')) {
+		return origin_get_user_dashboard_url();
+	}
+
+	return $url;
+}
+add_filter('user_dashboard_url', 'origin_filter_user_dashboard_url', 10, 2);
+
+/**
+ * 在限制 WordPress 后台时改写用户资料 URL。
+ *
+ * @param string $url     原始资料 URL。
+ * @param int    $user_id 用户 ID。
+ * @return string 调整后的资料 URL。
+ */
+function origin_filter_edit_profile_url(string $url, int $user_id): string {
+	if ($user_id > 0 && ! origin_can_regular_users_access_admin() && ! user_can($user_id, 'manage_options')) {
+		return origin_get_user_dashboard_url();
+	}
+
+	return $url;
+}
+add_filter('edit_profile_url', 'origin_filter_edit_profile_url', 10, 2);
+
+/**
+ * 为主题用户后台追加页面类名。
+ *
+ * @param array<int, string> $classes 当前页面类名。
+ * @return array<int, string> 调整后的页面类名。
+ */
+function origin_user_dashboard_body_class(array $classes): array {
+	if (origin_is_user_dashboard_request()) {
+		$classes[] = 'origin-account-page';
+	}
+
+	return $classes;
+}
+add_filter('body_class', 'origin_user_dashboard_body_class');
+
+/**
  * 读取认证跳转地址。
  *
+ * @param WP_User|null $user 已登录用户。提供后会按后台访问策略分流。
  * @return string 安全的跳转地址。
  */
-function origin_get_auth_redirect_url(): string {
+function origin_get_auth_redirect_url(?WP_User $user = null): string {
+	if ($user instanceof WP_User && ! user_can($user, 'manage_options') && ! origin_can_regular_users_access_admin()) {
+		return origin_get_user_dashboard_url();
+	}
+
 	$redirect_to = isset($_POST['redirect_to']) ? esc_url_raw(wp_unslash($_POST['redirect_to'])) : (wp_get_referer() ?: home_url('/'));
 	$redirect_to = remove_query_arg(array('origin_auth', 'origin_auth_panel'), $redirect_to);
 
@@ -265,6 +591,7 @@ function origin_get_auth_notice(): string {
 	$status = isset($_GET['origin_auth']) ? sanitize_key(wp_unslash($_GET['origin_auth'])) : '';
 
 	$messages = array(
+		'login_required'       => __('请先登录后再进入个人中心。', 'origin'),
 		'login_missing'        => __('请输入账号和密码。', 'origin'),
 		'login_failed'         => __('账号或密码不正确。', 'origin'),
 		'turnstile_failed'     => __('请先完成安全验证。', 'origin'),
@@ -274,11 +601,40 @@ function origin_get_auth_notice(): string {
 		'register_user_exists' => __('这个用户名已被使用。', 'origin'),
 		'register_bad_email'   => __('请输入有效的邮箱地址。', 'origin'),
 		'register_email_used'  => __('这个邮箱地址已被使用。', 'origin'),
-		'register_bad_pass'    => __('密码至少需要 8 个字符。', 'origin'),
+		'register_mail_sent'   => __('注册邮件已发送，请前往邮箱设置密码后登录。', 'origin'),
 		'register_failed'      => __('注册暂时失败，请稍后再试。', 'origin'),
 	);
 
 	return $messages[$status] ?? '';
+}
+
+/**
+ * 读取用户后台提示信息。
+ *
+ * @return array{message:string,type:string} 提示内容和类型。
+ */
+function origin_get_account_notice(): array {
+	$status = isset($_GET['origin_account']) ? sanitize_key(wp_unslash($_GET['origin_account'])) : '';
+
+	$messages = array(
+		'profile_saved'       => array(__('账户资料已更新。', 'origin'), 'success'),
+		'profile_missing'     => array(__('请填写显示名称和邮箱。', 'origin'), 'error'),
+		'profile_bad_email'   => array(__('请输入有效的邮箱地址。', 'origin'), 'error'),
+		'profile_email_used'  => array(__('这个邮箱地址已被其他账户使用。', 'origin'), 'error'),
+		'profile_save_failed' => array(__('账户资料暂时无法保存，请稍后再试。', 'origin'), 'error'),
+	);
+
+	if (! isset($messages[$status])) {
+		return array(
+			'message' => '',
+			'type'    => '',
+		);
+	}
+
+	return array(
+		'message' => $messages[$status][0],
+		'type'    => $messages[$status][1],
+	);
 }
 
 /**
@@ -442,7 +798,7 @@ function origin_handle_login(): void {
 		origin_redirect_with_auth_status('login_failed', 'login');
 	}
 
-	wp_safe_redirect(origin_get_auth_redirect_url());
+	wp_safe_redirect(origin_get_auth_redirect_url($user));
 	exit;
 }
 add_action('admin_post_nopriv_origin_login', 'origin_handle_login');
@@ -461,17 +817,19 @@ function origin_handle_register(): void {
 		origin_redirect_with_auth_status('turnstile_failed', 'register');
 	}
 
-	$username = isset($_POST['origin_username']) ? sanitize_user(wp_unslash($_POST['origin_username']), true) : '';
-	$email    = isset($_POST['origin_email']) ? sanitize_email(wp_unslash($_POST['origin_email'])) : '';
-	$password = isset($_POST['origin_password']) ? (string) wp_unslash($_POST['origin_password']) : '';
+	$raw_username = isset($_POST['origin_username']) ? trim((string) wp_unslash($_POST['origin_username'])) : '';
+	$raw_email    = isset($_POST['origin_email']) ? trim((string) wp_unslash($_POST['origin_email'])) : '';
 
-	if ('' === $username || '' === $email || '' === $password) {
+	if ('' === $raw_username || '' === $raw_email) {
 		origin_redirect_with_auth_status('register_missing', 'register');
 	}
 
-	if (! validate_username($username)) {
+	if (! validate_username($raw_username)) {
 		origin_redirect_with_auth_status('register_bad_user', 'register');
 	}
+
+	$username = sanitize_user($raw_username, true);
+	$email    = sanitize_email($raw_email);
 
 	if (username_exists($username)) {
 		origin_redirect_with_auth_status('register_user_exists', 'register');
@@ -485,28 +843,13 @@ function origin_handle_register(): void {
 		origin_redirect_with_auth_status('register_email_used', 'register');
 	}
 
-	if (strlen($password) < 8) {
-		origin_redirect_with_auth_status('register_bad_pass', 'register');
-	}
-
-	$user_id = wp_create_user($username, $password, $email);
+	$user_id = register_new_user($username, $email);
 
 	if (is_wp_error($user_id)) {
 		origin_redirect_with_auth_status('register_failed', 'register');
 	}
 
-	wp_new_user_notification($user_id, null, 'admin');
-	wp_signon(
-		array(
-			'user_login'    => $username,
-			'user_password' => $password,
-			'remember'      => true,
-		),
-		is_ssl()
-	);
-
-	wp_safe_redirect(origin_get_auth_redirect_url());
-	exit;
+	origin_redirect_with_auth_status('register_mail_sent', 'login');
 }
 add_action('admin_post_nopriv_origin_register', 'origin_handle_register');
 
@@ -523,6 +866,67 @@ function origin_handle_logout(): void {
 add_action('admin_post_origin_logout', 'origin_handle_logout');
 
 /**
+ * 跳转回主题用户后台并携带状态。
+ *
+ * @param string $status 用户后台状态。
+ */
+function origin_redirect_with_account_status(string $status): void {
+	wp_safe_redirect(
+		add_query_arg(
+			'origin_account',
+			sanitize_key($status),
+			origin_get_user_dashboard_url()
+		)
+	);
+	exit;
+}
+
+/**
+ * 处理主题用户后台资料保存。
+ */
+function origin_handle_profile_update(): void {
+	if (! is_user_logged_in()) {
+		origin_redirect_with_auth_status('login_required', 'login');
+	}
+
+	check_admin_referer('origin_update_profile', 'origin_update_profile_nonce');
+
+	$user_id      = get_current_user_id();
+	$display_name = isset($_POST['origin_display_name']) ? sanitize_text_field(wp_unslash($_POST['origin_display_name'])) : '';
+	$email        = isset($_POST['origin_email']) ? sanitize_email(wp_unslash($_POST['origin_email'])) : '';
+
+	if ('' === $display_name || '' === $email) {
+		origin_redirect_with_account_status('profile_missing');
+	}
+
+	if (! is_email($email)) {
+		origin_redirect_with_account_status('profile_bad_email');
+	}
+
+	$email_owner = email_exists($email);
+
+	if ($email_owner && (int) $email_owner !== $user_id) {
+		origin_redirect_with_account_status('profile_email_used');
+	}
+
+	$result = wp_update_user(
+		array(
+			'ID'           => $user_id,
+			'display_name' => $display_name,
+			'nickname'     => $display_name,
+			'user_email'   => $email,
+		)
+	);
+
+	if (is_wp_error($result)) {
+		origin_redirect_with_account_status('profile_save_failed');
+	}
+
+	origin_redirect_with_account_status('profile_saved');
+}
+add_action('admin_post_origin_update_profile', 'origin_handle_profile_update');
+
+/**
  * 输出头部账户操作。
  *
  * @param string $extra_class 额外 CSS 类名。
@@ -532,7 +936,7 @@ function origin_the_header_auth_controls(string $extra_class = ''): void {
 	?>
 	<div class="<?php echo esc_attr($classes); ?>">
 		<?php if (is_user_logged_in()) : ?>
-			<span class="gh-head-user"><?php echo esc_html(wp_get_current_user()->display_name); ?></span>
+			<a class="gh-head-user" href="<?php echo esc_url(origin_get_user_dashboard_url()); ?>"><?php echo esc_html(wp_get_current_user()->display_name); ?></a>
 			<form class="gh-head-logout" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" method="post">
 				<input type="hidden" name="action" value="origin_logout">
 				<input type="hidden" name="redirect_to" value="<?php echo esc_url(origin_get_current_url()); ?>">
