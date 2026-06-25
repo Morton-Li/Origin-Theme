@@ -103,7 +103,7 @@ $origin_is_account_page = function_exists('origin_is_user_dashboard_request') &&
 					<div id="origin-auth-login" class="auth-panel" role="tabpanel" aria-labelledby="origin-auth-login-tab" data-origin-auth-panel="login">
 						<form class="auth-form" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" method="post">
 							<input type="hidden" name="action" value="origin_login">
-							<input type="hidden" name="redirect_to" value="<?php echo esc_url(origin_get_current_url()); ?>">
+							<input type="hidden" name="redirect_to" value="<?php echo esc_url(origin_get_requested_login_redirect_url()); ?>">
 							<?php wp_nonce_field('origin_login', 'origin_login_nonce'); ?>
 							<label for="origin-login-field"><?php esc_html_e('账号或邮箱', 'origin'); ?></label>
 							<input id="origin-login-field" name="origin_login" type="text" autocomplete="username" required>
