@@ -14,6 +14,7 @@ if (! defined('ABSPATH')) {
 $current_user = wp_get_current_user();
 $display_name = '' !== $current_user->display_name ? $current_user->display_name : $current_user->user_login;
 $notice       = origin_get_account_notice();
+$can_manage_content = current_user_can('publish_posts');
 
 $approved_comments = (int) get_comments(
 	array(
@@ -29,7 +30,7 @@ $pending_comments = (int) get_comments(
 		'user_id' => $current_user->ID,
 	)
 );
-$published_posts = (int) count_user_posts($current_user->ID, 'post', true);
+$published_posts = $can_manage_content ? (int) count_user_posts($current_user->ID, 'post', true) : 0;
 $recent_comments = get_comments(
 	array(
 		'number'  => 5,
@@ -102,10 +103,12 @@ get_header();
 						<span><?php esc_html_e('待审核', 'origin'); ?></span>
 						<strong><?php echo esc_html(number_format_i18n($pending_comments)); ?></strong>
 					</div>
-					<div class="account-stat">
-						<span><?php esc_html_e('文章', 'origin'); ?></span>
-						<strong><?php echo esc_html(number_format_i18n($published_posts)); ?></strong>
-					</div>
+					<?php if ($can_manage_content) : ?>
+						<div class="account-stat">
+							<span><?php esc_html_e('文章', 'origin'); ?></span>
+							<strong><?php echo esc_html(number_format_i18n($published_posts)); ?></strong>
+						</div>
+					<?php endif; ?>
 				</div>
 
 				<?php if (current_user_can('manage_options')) : ?>
@@ -113,6 +116,12 @@ get_header();
 						<h2><?php esc_html_e('站点管理', 'origin'); ?></h2>
 						<p><?php esc_html_e('当前账户可以进入管理后台。', 'origin'); ?></p>
 						<a class="gh-btn gh-primary-btn" href="<?php echo esc_url(admin_url()); ?>"><?php esc_html_e('进入管理', 'origin'); ?></a>
+					</section>
+				<?php elseif ($can_manage_content) : ?>
+					<section class="account-panel account-access">
+						<h2><?php esc_html_e('内容管理', 'origin'); ?></h2>
+						<p><?php esc_html_e('当前账户可以进入写作后台。', 'origin'); ?></p>
+						<a class="gh-btn gh-primary-btn" href="<?php echo esc_url(admin_url('edit.php')); ?>"><?php esc_html_e('进入写作', 'origin'); ?></a>
 					</section>
 				<?php endif; ?>
 
