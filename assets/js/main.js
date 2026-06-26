@@ -14,10 +14,12 @@
 	const searchField = searchModal?.querySelector('.search-field');
 	const authModal = document.querySelector('[data-origin-auth-modal]');
 	const authOpenButtons = document.querySelectorAll('[data-origin-auth-open]');
-	const authCloseButtons = document.querySelectorAll('[data-origin-auth-close]');
-	const authTabs = document.querySelectorAll('[data-origin-auth-tab]');
-	const authPanels = document.querySelectorAll('.auth-panel[data-origin-auth-panel]');
-	const authStage = document.querySelector('[data-origin-auth-stage]');
+	const authContent = authModal?.querySelector('[data-origin-auth-content]');
+	const authLoading = authModal?.querySelector('[data-origin-auth-loading]');
+	const authError = authModal?.querySelector('[data-origin-auth-error]');
+	let authTabs = document.querySelectorAll('[data-origin-auth-tab]');
+	let authPanels = document.querySelectorAll('.auth-panel[data-origin-auth-panel]');
+	let authStage = document.querySelector('[data-origin-auth-stage]');
 	const shareButtons = document.querySelectorAll('[data-origin-share]');
 	const backToTopButton = document.querySelector('[data-origin-back-to-top]');
 	const transitionTimers = new WeakMap();
@@ -27,6 +29,9 @@
 	const pageTransitionDuration = 220;
 	let backToTopFrame = 0;
 	let authPanelResizeObserver = null;
+	let authContentLoaded = Boolean(authModal?.querySelector('.auth-panel[data-origin-auth-panel]'));
+	let authContentRequest = null;
+	let authStateRequestId = 0;
 
 	const finishPageLoad = () => {
 		root.classList.remove('origin-page-loading', 'origin-page-exiting');
@@ -227,6 +232,143 @@
 		}
 	};
 
+	const refreshAuthElements = () => {
+		if (!authModal) {
+			return;
+		}
+
+		authTabs = authModal.querySelectorAll('[data-origin-auth-tab]');
+		authPanels = authModal.querySelectorAll('.auth-panel[data-origin-auth-panel]');
+		authStage = authModal.querySelector('[data-origin-auth-stage]');
+	};
+
+	const setAuthLoadingState = (state) => {
+		if (authLoading instanceof HTMLElement) {
+			authLoading.hidden = state !== 'loading';
+		}
+
+		if (authError instanceof HTMLElement) {
+			authError.hidden = state !== 'error';
+		}
+
+		if (authContent instanceof HTMLElement) {
+			authContent.hidden = state !== 'ready';
+		}
+	};
+
+	const buildAuthLoadUrl = (panelName) => {
+		if (!authModal) {
+			return null;
+		}
+
+		const endpoint = authModal.getAttribute('data-origin-auth-url');
+
+		if (!endpoint) {
+			return null;
+		}
+
+		const url = new URL(endpoint, window.location.href);
+		const currentParams = new URLSearchParams(window.location.search);
+
+		url.searchParams.set('action', 'origin_load_auth_modal');
+		url.searchParams.set('panel', panelName === 'register' ? 'register' : 'login');
+		url.searchParams.set('current_url', window.location.href);
+
+		['origin_auth', 'origin_auth_panel', 'redirect_to'].forEach((key) => {
+			if (currentParams.has(key)) {
+				url.searchParams.set(key, currentParams.get(key));
+			}
+		});
+
+		return url;
+	};
+
+	const renderTurnstileWidgets = (attempt = 0) => {
+		if (!(authContent instanceof HTMLElement)) {
+			return;
+		}
+
+		const widgets = authContent.querySelectorAll('.cf-turnstile:not([data-origin-turnstile-rendered])');
+
+		if (!widgets.length) {
+			return;
+		}
+
+		if (!window.turnstile || typeof window.turnstile.render !== 'function') {
+			if (attempt < 10) {
+				window.setTimeout(() => renderTurnstileWidgets(attempt + 1), 200);
+			}
+
+			return;
+		}
+
+		widgets.forEach((widget) => {
+			window.turnstile.render(widget);
+			widget.setAttribute('data-origin-turnstile-rendered', 'true');
+		});
+	};
+
+	const loadAuthContent = async (panelName = 'login') => {
+		if (!(authContent instanceof HTMLElement)) {
+			return false;
+		}
+
+		if (authContentLoaded) {
+			setAuthLoadingState('ready');
+			return true;
+		}
+
+		if (authContentRequest) {
+			return authContentRequest;
+		}
+
+		const url = buildAuthLoadUrl(panelName);
+
+		if (!url) {
+			setAuthLoadingState('error');
+			return false;
+		}
+
+		setAuthLoadingState('loading');
+
+		authContentRequest = fetch(url, {
+			credentials: 'same-origin',
+			headers: {
+				'X-Requested-With': 'XMLHttpRequest',
+			},
+		})
+			.then(async (response) => {
+				if (!response.ok) {
+					throw new Error('Auth modal request failed.');
+				}
+
+				const payload = await response.json();
+
+				if (!payload.success || !payload.data || typeof payload.data.html !== 'string') {
+					throw new Error('Auth modal response is invalid.');
+				}
+
+				authContent.innerHTML = payload.data.html;
+				authModal?.setAttribute('data-origin-auth-current-panel', payload.data.panel || panelName);
+				authModal?.setAttribute('data-origin-auth-has-notice', payload.data.hasNotice ? 'true' : 'false');
+				authContentLoaded = true;
+				authContentRequest = null;
+
+				refreshAuthElements();
+				setAuthLoadingState('ready');
+				window.setTimeout(renderTurnstileWidgets, 0);
+
+				return true;
+			})
+			.catch(() => {
+				authContentRequest = null;
+				setAuthLoadingState('error');
+				return false;
+			});
+
+		return authContentRequest;
+	};
+
 	const setAuthStageHeight = (panel, shouldAnimate = true) => {
 		if (!(authStage instanceof HTMLElement) || !(panel instanceof HTMLElement)) {
 			return;
@@ -325,11 +467,12 @@
 		return selectedPanelElement;
 	};
 
-	const setAuthState = (isOpen, panelName = 'login') => {
+	const setAuthState = async (isOpen, panelName = 'login') => {
 		if (!authModal) {
 			return;
 		}
 
+		const requestId = ++authStateRequestId;
 		const wasAuthOpen = document.body.classList.contains('auth-open');
 		let activeAuthPanel = null;
 
@@ -337,15 +480,26 @@
 			setSearchState(false);
 			setMenuState(false);
 			openLayer(authModal);
+			document.body.classList.add('auth-open');
 		}
 
 		if (isOpen) {
+			const hasContent = await loadAuthContent(panelName);
+
+			if (requestId !== authStateRequestId) {
+				return;
+			}
+
+			if (!hasContent) {
+				return;
+			}
+
 			activeAuthPanel = setAuthPanel(panelName, true, wasAuthOpen);
 		} else {
 			closeLayer(authModal);
+			document.body.classList.remove('auth-open');
+			return;
 		}
-
-		document.body.classList.toggle('auth-open', isOpen);
 
 		if (isOpen) {
 			const currentPanel = activeAuthPanel || authModal.querySelector('.auth-panel.is-active');
@@ -383,16 +537,27 @@
 		button.addEventListener('click', () => setAuthState(true, button.getAttribute('data-origin-auth-open') || 'login'));
 	});
 
-	authCloseButtons.forEach((button) => {
-		button.addEventListener('click', () => setAuthState(false));
-	});
-
-	authTabs.forEach((tab) => {
-		tab.addEventListener('click', () => setAuthPanel(tab.getAttribute('data-origin-auth-tab') || 'login'));
-	});
-
 	if (authModal) {
-		setAuthPanel(authModal.getAttribute('data-origin-auth-current-panel') || 'login', false);
+		authModal.addEventListener('click', (event) => {
+			if (!(event.target instanceof Element)) {
+				return;
+			}
+
+			if (event.target.closest('[data-origin-auth-close]')) {
+				setAuthState(false);
+				return;
+			}
+
+			const tab = event.target.closest('[data-origin-auth-tab]');
+
+			if (tab instanceof HTMLElement) {
+				setAuthPanel(tab.getAttribute('data-origin-auth-tab') || 'login');
+			}
+		});
+
+		if (authContentLoaded) {
+			setAuthPanel(authModal.getAttribute('data-origin-auth-current-panel') || 'login', false);
+		}
 
 		if (authModal.getAttribute('data-origin-auth-has-notice') === 'true') {
 			setAuthState(true, authModal.getAttribute('data-origin-auth-current-panel') || 'login');
