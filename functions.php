@@ -243,6 +243,18 @@ function origin_get_requested_login_redirect_url(): string {
 }
 
 /**
+ * 读取异步认证面板的上下文地址。
+ *
+ * @return string 安全的上下文地址。
+ */
+function origin_get_auth_modal_context_url(): string {
+	$context_url = isset($_GET['current_url']) ? esc_url_raw(wp_unslash($_GET['current_url'])) : origin_get_current_url();
+	$context_url = remove_query_arg(array('origin_auth', 'origin_auth_panel'), $context_url);
+
+	return wp_validate_redirect($context_url, home_url('/'));
+}
+
+/**
  * 读取主题用户后台固定地址别名。
  *
  * @return string 用户后台地址别名。
@@ -676,6 +688,99 @@ function origin_get_auth_panel(): string {
 
 	return in_array($panel, array('login', 'register'), true) ? $panel : 'login';
 }
+
+/**
+ * 读取认证弹层请求面板。
+ *
+ * @return string 面板名称。
+ */
+function origin_get_requested_auth_panel(): string {
+	$panel = isset($_GET['panel']) ? sanitize_key(wp_unslash($_GET['panel'])) : origin_get_auth_panel();
+
+	return in_array($panel, array('login', 'register'), true) ? $panel : 'login';
+}
+
+/**
+ * 输出认证弹层的动态内容。
+ *
+ * @param string $context_url 表单完成后的回跳上下文地址。
+ */
+function origin_the_auth_modal_content(string $context_url): void {
+	$auth_notice = origin_get_auth_notice();
+	?>
+	<div class="auth-tabs" role="tablist" aria-label="<?php esc_attr_e('账户操作', 'origin'); ?>">
+		<button id="origin-auth-login-tab" class="auth-tab" type="button" role="tab" aria-controls="origin-auth-login" data-origin-auth-tab="login"><?php esc_html_e('登录', 'origin'); ?></button>
+		<button id="origin-auth-register-tab" class="auth-tab" type="button" role="tab" aria-controls="origin-auth-register" data-origin-auth-tab="register"><?php esc_html_e('注册', 'origin'); ?></button>
+	</div>
+
+	<?php if ($auth_notice) : ?>
+		<div class="auth-notice" role="alert"><?php echo esc_html($auth_notice); ?></div>
+	<?php endif; ?>
+
+	<div class="auth-panel-stage" data-origin-auth-stage>
+		<div id="origin-auth-login" class="auth-panel" role="tabpanel" aria-labelledby="origin-auth-login-tab" data-origin-auth-panel="login">
+			<form class="auth-form" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" method="post">
+				<input type="hidden" name="action" value="origin_login">
+				<input type="hidden" name="redirect_to" value="<?php echo esc_url(origin_get_requested_login_redirect_url()); ?>">
+				<?php wp_nonce_field('origin_login', 'origin_login_nonce'); ?>
+				<label for="origin-login-field"><?php esc_html_e('账号或邮箱', 'origin'); ?></label>
+				<input id="origin-login-field" name="origin_login" type="text" autocomplete="username" required>
+				<label for="origin-login-password"><?php esc_html_e('密码', 'origin'); ?></label>
+				<input id="origin-login-password" name="origin_password" type="password" autocomplete="current-password" required>
+				<label class="auth-checkbox" for="origin-login-remember">
+					<input id="origin-login-remember" name="origin_remember" type="checkbox" value="1">
+					<span><?php esc_html_e('保持登录', 'origin'); ?></span>
+				</label>
+				<?php origin_the_turnstile_widget('login'); ?>
+				<button class="gh-btn gh-primary-btn auth-submit" type="submit"><?php esc_html_e('登录', 'origin'); ?></button>
+			</form>
+		</div>
+
+		<div id="origin-auth-register" class="auth-panel" role="tabpanel" aria-labelledby="origin-auth-register-tab" data-origin-auth-panel="register">
+			<?php if (get_option('users_can_register')) : ?>
+				<form class="auth-form" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" method="post">
+					<input type="hidden" name="action" value="origin_register">
+					<input type="hidden" name="redirect_to" value="<?php echo esc_url($context_url); ?>">
+					<?php wp_nonce_field('origin_register', 'origin_register_nonce'); ?>
+					<label for="origin-register-username"><?php esc_html_e('用户名', 'origin'); ?></label>
+					<input id="origin-register-username" name="origin_username" type="text" autocomplete="username" required>
+					<p class="auth-help"><?php esc_html_e('仅支持字母、数字、空格、下划线、连字符、句点和 @。', 'origin'); ?></p>
+					<label for="origin-register-email"><?php esc_html_e('邮箱', 'origin'); ?></label>
+					<input id="origin-register-email" name="origin_email" type="email" autocomplete="email" required>
+					<p class="auth-help"><?php esc_html_e('注册后将向该邮箱发送设置密码链接。', 'origin'); ?></p>
+					<?php origin_the_turnstile_widget('register'); ?>
+					<button class="gh-btn gh-primary-btn auth-submit" type="submit"><?php esc_html_e('注册', 'origin'); ?></button>
+				</form>
+			<?php else : ?>
+				<p class="auth-muted"><?php esc_html_e('当前站点暂未开放注册。', 'origin'); ?></p>
+			<?php endif; ?>
+		</div>
+	</div>
+	<?php
+}
+
+/**
+ * 异步加载认证弹层内容。
+ */
+function origin_ajax_load_auth_modal(): void {
+	$panel       = origin_get_requested_auth_panel();
+	$notice      = origin_get_auth_notice();
+	$context_url = origin_get_auth_modal_context_url();
+
+	ob_start();
+	origin_the_auth_modal_content($context_url);
+	$html = ob_get_clean();
+
+	wp_send_json_success(
+		array(
+			'html'      => is_string($html) ? $html : '',
+			'panel'     => $panel,
+			'hasNotice' => '' !== $notice,
+		)
+	);
+}
+add_action('wp_ajax_origin_load_auth_modal', 'origin_ajax_load_auth_modal');
+add_action('wp_ajax_nopriv_origin_load_auth_modal', 'origin_ajax_load_auth_modal');
 
 /**
  * 读取 Turnstile 站点密钥。
