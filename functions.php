@@ -1190,6 +1190,35 @@ function origin_comment_form_defaults(array $defaults): array {
 add_filter('comment_form_defaults', 'origin_comment_form_defaults');
 
 /**
+ * 将评论回复登录入口改为主题认证弹层。
+ *
+ * @param string     $comment_reply_link 评论回复链接 HTML。
+ * @param array      $args               评论回复链接参数。
+ * @param WP_Comment $comment            当前评论对象。
+ * @param WP_Post    $post               当前文章对象。
+ * @return string 调整后的评论回复链接 HTML。
+ */
+function origin_comment_reply_link(string $comment_reply_link, array $args, WP_Comment $comment, WP_Post $post): string {
+	if (is_user_logged_in() || ! get_option('comment_registration')) {
+		return $comment_reply_link;
+	}
+
+	$comment_redirect_url = get_permalink($post);
+	$comment_redirect_url = is_string($comment_redirect_url) ? $comment_redirect_url : home_url('/');
+	$comment_login_url    = origin_get_auth_modal_url('login', $comment_redirect_url, 'comment_login_required');
+	$login_text           = isset($args['login_text']) && is_string($args['login_text']) ? $args['login_text'] : __('登录以回复', 'origin');
+
+	return sprintf(
+		'%1$s<a rel="nofollow" class="comment-reply-login" href="%2$s">%3$s</a>%4$s',
+		isset($args['before']) && is_string($args['before']) ? $args['before'] : '',
+		esc_url($comment_login_url),
+		wp_kses_post($login_text),
+		isset($args['after']) && is_string($args['after']) ? $args['after'] : ''
+	);
+}
+add_filter('comment_reply_link', 'origin_comment_reply_link', 10, 4);
+
+/**
  * 在评论提交按钮前输出 Turnstile 组件。
  *
  * @param string               $submit_field 提交区域 HTML。
