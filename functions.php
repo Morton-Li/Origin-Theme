@@ -488,6 +488,24 @@ function origin_is_wp_admin_endpoint_request(): bool {
 }
 
 /**
+ * 判断目标地址是否为后台提交或异步端点。
+ *
+ * @param string $url 待检查的地址。
+ * @return bool 指向后台端点时返回 true。
+ */
+function origin_is_wp_admin_endpoint_url(string $url): bool {
+	$target_path = wp_parse_url($url, PHP_URL_PATH);
+
+	if (! is_string($target_path)) {
+		return false;
+	}
+
+	$target_file = basename($target_path);
+
+	return in_array($target_file, array('admin-ajax.php', 'admin-post.php'), true);
+}
+
+/**
  * 判断目标地址是否指向管理后台。
  *
  * @param string $url 待检查的地址。
@@ -558,6 +576,10 @@ function origin_filter_login_redirect(string $redirect_to, string $requested_red
 	$target_url = remove_query_arg(array('origin_auth', 'origin_auth_panel'), $target_url);
 	$target_url = wp_validate_redirect($target_url, home_url('/'));
 
+	if (origin_is_wp_admin_endpoint_url($target_url)) {
+		return home_url('/');
+	}
+
 	if (! $can_access_admin && origin_is_wp_admin_url($target_url)) {
 		return home_url('/');
 	}
@@ -620,9 +642,22 @@ add_filter('body_class', 'origin_user_dashboard_body_class');
  * @return string 安全的跳转地址。
  */
 function origin_get_auth_redirect_url(?WP_User $user = null): string {
-	$redirect_to = isset($_POST['redirect_to']) ? esc_url_raw(wp_unslash($_POST['redirect_to'])) : (wp_get_referer() ?: home_url('/'));
+	$redirect_to = '';
+
+	if (isset($_POST['redirect_to']) && is_scalar($_POST['redirect_to'])) {
+		$redirect_to = trim(esc_url_raw(wp_unslash((string) $_POST['redirect_to'])));
+	}
+
+	if ('' === $redirect_to) {
+		return home_url('/');
+	}
+
 	$redirect_to = remove_query_arg(array('origin_auth', 'origin_auth_panel'), $redirect_to);
 	$redirect_to = wp_validate_redirect($redirect_to, home_url('/'));
+
+	if (origin_is_wp_admin_endpoint_url($redirect_to)) {
+		return home_url('/');
+	}
 
 	if (origin_is_wp_admin_url($redirect_to) && (! $user instanceof WP_User || ! $user->exists() || ! origin_can_user_access_wp_admin($user))) {
 		return home_url('/');
