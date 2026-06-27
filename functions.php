@@ -243,13 +243,40 @@ function origin_get_requested_login_redirect_url(): string {
 }
 
 /**
+ * 生成打开主题认证弹层的前台地址。
+ *
+ * @param string $panel       认证面板名称。
+ * @param string $redirect_to 登录成功后的回跳地址。
+ * @param string $status      可选认证提示状态。
+ * @return string 认证弹层地址。
+ */
+function origin_get_auth_modal_url(string $panel = 'login', string $redirect_to = '', string $status = ''): string {
+	$panel       = in_array($panel, array('login', 'register'), true) ? $panel : 'login';
+	$redirect_to = '' !== $redirect_to ? wp_validate_redirect($redirect_to, home_url('/')) : '';
+	$base_url    = '' !== $redirect_to ? $redirect_to : home_url('/');
+	$query_args  = array(
+		'origin_auth_panel' => $panel,
+	);
+
+	if ('' !== $status) {
+		$query_args['origin_auth'] = sanitize_key($status);
+	}
+
+	if ('' !== $redirect_to) {
+		$query_args['redirect_to'] = $redirect_to;
+	}
+
+	return add_query_arg($query_args, $base_url);
+}
+
+/**
  * 读取异步认证面板的上下文地址。
  *
  * @return string 安全的上下文地址。
  */
 function origin_get_auth_modal_context_url(): string {
 	$context_url = isset($_GET['current_url']) ? esc_url_raw(wp_unslash($_GET['current_url'])) : origin_get_current_url();
-	$context_url = remove_query_arg(array('origin_auth', 'origin_auth_panel'), $context_url);
+	$context_url = remove_query_arg(array('origin_auth', 'origin_auth_panel', 'redirect_to'), $context_url);
 
 	return wp_validate_redirect($context_url, home_url('/'));
 }
@@ -632,18 +659,19 @@ function origin_get_auth_notice(): string {
 	$status = isset($_GET['origin_auth']) ? sanitize_key(wp_unslash($_GET['origin_auth'])) : '';
 
 	$messages = array(
-		'login_required'       => __('请先登录后再进入个人中心。', 'origin'),
-		'login_missing'        => __('请输入账号和密码。', 'origin'),
-		'login_failed'         => __('账号或密码不正确。', 'origin'),
-		'turnstile_failed'     => __('请先完成安全验证。', 'origin'),
-		'register_closed'      => __('当前站点暂未开放注册。', 'origin'),
-		'register_missing'     => __('请填写注册所需信息。', 'origin'),
-		'register_bad_user'    => __('用户名只能包含字母、数字、空格、下划线、连字符、句点和 @。', 'origin'),
-		'register_user_exists' => __('这个用户名已被使用。', 'origin'),
-		'register_bad_email'   => __('请输入有效的邮箱地址。', 'origin'),
-		'register_email_used'  => __('这个邮箱地址已被使用。', 'origin'),
-		'register_mail_sent'   => __('注册邮件已发送，请前往邮箱设置密码后登录。', 'origin'),
-		'register_failed'      => __('注册暂时失败，请稍后再试。', 'origin'),
+		'login_required'         => __('请先登录后再进入个人中心。', 'origin'),
+		'comment_login_required' => __('请先登录后再发表评论。', 'origin'),
+		'login_missing'          => __('请输入账号和密码。', 'origin'),
+		'login_failed'           => __('账号或密码不正确。', 'origin'),
+		'turnstile_failed'       => __('请先完成安全验证。', 'origin'),
+		'register_closed'        => __('当前站点暂未开放注册。', 'origin'),
+		'register_missing'       => __('请填写注册所需信息。', 'origin'),
+		'register_bad_user'      => __('用户名只能包含字母、数字、空格、下划线、连字符、句点和 @。', 'origin'),
+		'register_user_exists'   => __('这个用户名已被使用。', 'origin'),
+		'register_bad_email'     => __('请输入有效的邮箱地址。', 'origin'),
+		'register_email_used'    => __('这个邮箱地址已被使用。', 'origin'),
+		'register_mail_sent'     => __('注册邮件已发送，请前往邮箱设置密码后登录。', 'origin'),
+		'register_failed'        => __('注册暂时失败，请稍后再试。', 'origin'),
 	);
 
 	return $messages[$status] ?? '';
@@ -1139,11 +1167,22 @@ add_filter('comment_form_default_fields', 'origin_comment_form_default_fields');
  * @return array<string, mixed> 调整后的默认参数。
  */
 function origin_comment_form_defaults(array $defaults): array {
+	$comment_redirect_url = get_permalink();
+	$comment_redirect_url = is_string($comment_redirect_url) ? $comment_redirect_url : home_url('/');
+	$comment_login_url    = origin_get_auth_modal_url('login', $comment_redirect_url, 'comment_login_required');
+
 	$defaults['comment_notes_before'] = '';
 	$defaults['comment_notes_after']  = '';
 	$defaults['comment_field']        = sprintf(
 		'<p class="comment-form-comment"><label for="comment">%1$s <span class="required">*</span></label><textarea id="comment" name="comment" cols="45" rows="5" maxlength="65525" required></textarea></p>',
 		esc_html__('评论', 'origin')
+	);
+	$defaults['must_log_in']          = sprintf(
+		'<p class="must-log-in">%1$s <a href="%2$s">%3$s</a> %4$s</p>',
+		esc_html__('请先', 'origin'),
+		esc_url($comment_login_url),
+		esc_html__('登录', 'origin'),
+		esc_html__('后发表评论。', 'origin')
 	);
 
 	return $defaults;
